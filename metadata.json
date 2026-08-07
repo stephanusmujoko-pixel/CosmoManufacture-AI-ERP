@@ -1,0 +1,6 @@
+{
+  "name": "CosmoManufacture AI ERP",
+  "description": "Enterprise Multi-Tenant AI ERP SaaS for Cosmetic & Skincare Manufacturing with RSA License Binding, White Labeling, AI Copilot, HPP Costing, BI Analytics, and Full Production Deployment Readiness",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
