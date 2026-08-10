@@ -6,10 +6,15 @@ import {
   dbGoodsReceipts,
   dbSupplierInvoices,
   dbVendorPerformance,
+  dbBlanketPurchaseOrders,
+  dbVendorAudits,
   PurchaseRequisition,
   PurchaseOrder,
   GoodsReceipt,
   SupplierInvoice,
+  RequestForQuotation,
+  BlanketPurchaseOrder,
+  VendorAuditRecord,
 } from './procurementData.js';
 
 export const procurementRouter = Router();
@@ -22,6 +27,7 @@ procurementRouter.get('/procurement/dashboard-metrics', (req: Request, res: Resp
   const activePoValueRp = dbPurchaseOrders.reduce((sum, po) => sum + po.grandTotalRp, 0);
   const pendingThreeWayMatch = dbSupplierInvoices.filter((inv) => inv.threeWayMatchStatus !== 'Matched').length;
   const avgVendorScore = (dbVendorPerformance.reduce((s, v) => s + v.overallVendorScore, 0) / (dbVendorPerformance.length || 1)).toFixed(1);
+  const activeBpoCount = dbBlanketPurchaseOrders.filter((b) => b.status === 'Active').length;
 
   res.json({
     success: true,
@@ -32,8 +38,102 @@ procurementRouter.get('/procurement/dashboard-metrics', (req: Request, res: Resp
       activePoValueRp,
       pendingThreeWayMatch,
       avgVendorScore,
+      activeBpoCount,
     },
   });
+});
+
+// GET /api/procurement/blanket-orders
+procurementRouter.get('/procurement/blanket-orders', (req: Request, res: Response) => {
+  res.json({ success: true, count: dbBlanketPurchaseOrders.length, data: dbBlanketPurchaseOrders });
+});
+
+// POST /api/procurement/blanket-orders/call-off
+procurementRouter.post('/procurement/blanket-orders/call-off', (req: Request, res: Response) => {
+  const { bpoId, releaseQtyKg, warehouseCode, deliveryDate } = req.body;
+  const bpo = dbBlanketPurchaseOrders.find((b) => b.id === bpoId);
+  if (!bpo) {
+    return res.status(404).json({ success: false, error: 'Blanket Purchase Order not found' });
+  }
+
+  const qty = Number(releaseQtyKg) || 100;
+  if (qty > bpo.remainingQuantityKg) {
+    return res.status(400).json({ success: false, error: 'Kuantitas release melebihi sisa kontrak BPO!' });
+  }
+
+  bpo.releasedQuantityKg += qty;
+  bpo.remainingQuantityKg -= qty;
+  if (bpo.remainingQuantityKg <= 0) {
+    bpo.status = 'Fulfilled';
+  }
+
+  const subtotal = qty * bpo.contractedPricePerUnitRp;
+  const tax = subtotal * 0.11;
+  const grandTotal = subtotal + tax;
+
+  const callOffPo: PurchaseOrder = {
+    id: `po-${Date.now()}`,
+    poNumber: `PO/CALL-OFF/2026/08/00${dbPurchaseOrders.length + 50}`,
+    supplierCode: bpo.supplierCode,
+    supplierName: bpo.supplierName,
+    warehouseCode: warehouseCode || 'WH-RM-01',
+    paymentTermDays: 30,
+    shippingMethod: 'Land Cold Trucking',
+    incoterms: 'DDP',
+    expectedDeliveryDate: deliveryDate || '2026-08-25',
+    items: [
+      {
+        id: `poit-${Date.now()}`,
+        itemCode: bpo.itemCode,
+        itemName: bpo.materialName,
+        quantityOrdered: qty,
+        quantityReceived: 0,
+        unitPriceRp: bpo.contractedPricePerUnitRp,
+        discountPct: 0,
+        subtotalRp: subtotal,
+      },
+    ],
+    subtotalRp: subtotal,
+    taxPpnRp: tax,
+    grandTotalRp: grandTotal,
+    status: 'Approved',
+    approvalHistory: [
+      { role: 'Procurement Specialist', approverName: 'Auto Call-off BPO System', status: 'Approved', date: new Date().toISOString().split('T')[0] },
+    ],
+    createdDate: new Date().toISOString().split('T')[0],
+  };
+
+  dbPurchaseOrders.unshift(callOffPo);
+
+  res.json({
+    success: true,
+    message: `Call-Off PO sebesar ${qty} Kg berhasil diterbitkan dari Kontrak BPO ${bpo.contractNumber}!`,
+    data: { bpo, newPo: callOffPo },
+  });
+});
+
+// GET /api/procurement/vendor-audits
+procurementRouter.get('/procurement/vendor-audits', (req: Request, res: Response) => {
+  res.json({ success: true, count: dbVendorAudits.length, data: dbVendorAudits });
+});
+
+// POST /api/procurement/vendor-audits
+procurementRouter.post('/procurement/vendor-audits', (req: Request, res: Response) => {
+  const { supplierCode, supplierName, gmpCpkbStatus, halalStatus, bpomRawMaterialCode, coaCompliancePct } = req.body;
+  const newAudit: VendorAuditRecord = {
+    supplierCode: supplierCode || `SUP-NEW-${Date.now().toString().slice(-3)}`,
+    supplierName: supplierName || 'Supplier Baru',
+    gmpCpkbStatus: gmpCpkbStatus || 'CPKB / GMP Certified',
+    halalStatus: halalStatus || 'Halal LPPOM MUI Certified',
+    bpomRawMaterialCode: bpomRawMaterialCode || 'BPOM-RAW-PENDING',
+    lastAuditDate: new Date().toISOString().split('T')[0],
+    nextAuditDueDate: '2027-08-08',
+    coaCompliancePct: Number(coaCompliancePct) || 98.0,
+    qualificationStatus: 'Qualified (Preferred)',
+  };
+
+  dbVendorAudits.unshift(newAudit);
+  res.status(201).json({ success: true, message: 'Vendor Audit & CPKB Qualification updated', data: newAudit });
 });
 
 // GET /api/procurement/purchase-requisitions
@@ -89,6 +189,69 @@ procurementRouter.patch('/procurement/purchase-requisitions/:id/approve', (req: 
 // GET /api/procurement/rfqs
 procurementRouter.get('/procurement/rfqs', (req: Request, res: Response) => {
   res.json({ success: true, data: dbRfqs });
+});
+
+// POST /api/procurement/rfqs
+procurementRouter.post('/procurement/rfqs', (req: Request, res: Response) => {
+  const { prNumber, itemCode, itemName, quantityNeeded, deadlineDate, supplierQuotes } = req.body;
+  const newRfq: RequestForQuotation = {
+    id: `rfq-${Date.now()}`,
+    rfqNumber: `RFQ/PROC/2026/08/00${dbRfqs.length + 90}`,
+    prNumber: prNumber || 'PR/PROC/2026/08/0019',
+    itemCode: itemCode || 'RM-ACT-005',
+    itemName: itemName || 'Alpha Arbutin Powder Grade A',
+    quantityNeeded: Number(quantityNeeded) || 100,
+    deadlineDate: deadlineDate || '2026-08-30',
+    supplierQuotes: supplierQuotes && supplierQuotes.length > 0 ? supplierQuotes : [
+      {
+        supplierCode: 'SUP-ID-001',
+        supplierName: 'PT Chemical Nusantara Fine Ingredients',
+        pricePerUnitRp: 820000,
+        leadTimeDays: 7,
+        moqUnits: 50,
+        paymentTermDays: 30,
+        qualityRatingScore: 98,
+        deliveryPerformancePct: 96,
+        status: 'Submitted',
+      },
+      {
+        supplierCode: 'SUP-SG-002',
+        supplierName: 'PureBio Ingredients Asia Pte Ltd',
+        pricePerUnitRp: 840000,
+        leadTimeDays: 10,
+        moqUnits: 100,
+        paymentTermDays: 45,
+        qualityRatingScore: 96,
+        deliveryPerformancePct: 94,
+        status: 'Submitted',
+      },
+    ],
+    status: 'Open',
+    createdDate: new Date().toISOString().split('T')[0],
+  };
+
+  dbRfqs.unshift(newRfq);
+  res.status(201).json({ success: true, message: 'Request For Quotation (RFQ) created successfully', data: newRfq });
+});
+
+// POST /api/procurement/ai-chat
+procurementRouter.post('/procurement/ai-chat', (req: Request, res: Response) => {
+  const { message } = req.body;
+  const msgLower = (message || '').toLowerCase();
+
+  let reply = 'AI Procurement Assistant aktif. Saya dapat menganalisis tren harga bahan baku aktif, verifikasi dokumen Halal/CPKB supplier, sertakan rekomendasi Blanket Order, dan kalkulasi total cost of ownership (TCO).';
+
+  if (msgLower.includes('harga') || msgLower.includes('niacinamide') || msgLower.includes('tren')) {
+    reply = '📊 **Analisis Tren Harga & Pasar Raw Material:**\n- **Niacinamide USP Grade**: Proyeksi kenaikan harga +3.2% bulan depan karena keterbatasan pasokan impor. Direkomendasikan menambah **Blanket Purchase Order 1.000 Kg** ke PT Chemical Nusantara untuk mengunci harga diskon Rp 170.000/Kg (Hemat Rp 8.000.000).\n- **Hyaluronic Acid Powder**: Harga stabil Rp 1.150.000/Kg dengan lead time 14 hari dari Singapura.';
+  } else if (msgLower.includes('supplier') || msgLower.includes('vendor') || msgLower.includes('cpkb') || msgLower.includes('halal')) {
+    reply = '🛡️ **Status Kualifikasi Vendor CPKB & Halal:**\n1. **PT Chemical Nusantara**: CPKB Certified, Sertifikat Halal LPPOM MUI Aktif (s/d Feb 2027), Rating Quality Score 99.0% (Class A Preferred).\n2. **PureBio Ingredients Asia**: ISO 22716 Certified, Status Import Clearance Smooth.\n3. **PT Packaging Indah**: Status *Under Audit* - Perlu melengkapi Sertifikat Bebas Bisphenol A (BPA Free) untuk botol toner.';
+  } else if (msgLower.includes('3-way') || msgLower.includes('invoice') || msgLower.includes('match') || msgLower.includes('selisih')) {
+    reply = '🧾 **3-Way Matching Verification Status:**\n- Semua PO dan GRN bulan Agustus 2026 telah sesuai 100% (Matched) tanpa selisih harga atau kuantitas.\n- Total tagihan Rp 95.182.500 dijadwalkan cair pada 5 September 2026 sesuai Payment Term 30 hari (TOP).';
+  } else if (msgLower.includes('rfq') || msgLower.includes('po') || msgLower.includes('order')) {
+    reply = '⚡ **Rekomendasi Tindakan Pengadaan:**\n- **RFQ/PROC/2026/08/0088**: Penawaran terbaik dimenangkan oleh *PT Chemical Nusantara* (Rp 175.000/Kg, Lead Time 7 Hari).\n- Disarankan konfirmasi pembukaan PO untuk PR/PROC/2026/08/0020 (Botol Pipet Kaca Amber 25.000 Pcs).';
+  }
+
+  res.json({ success: true, reply });
 });
 
 // GET /api/procurement/purchase-orders

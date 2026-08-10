@@ -24,12 +24,18 @@ import {
   Sparkles,
   RefreshCw,
   Sliders,
+  ChevronLeft,
   ChevronRight,
   Shield,
   Layers,
   BarChart2,
   Calendar,
   FileCheck,
+  Stethoscope,
+  Activity,
+  Cpu,
+  UserCheck,
+  Flame,
 } from 'lucide-react';
 
 interface Employee {
@@ -152,8 +158,75 @@ interface PerformanceKpi {
   evaluatorName: string;
 }
 
+interface CleanroomClearance {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  cleanroomGradeAccess: string;
+  gowningCompetencyScorePct: number;
+  medicalClearanceStatus: string;
+  lastSwabTestDate: string;
+  swabTestResult: string;
+  hygieneAuditScorePct: number;
+  airShowerGateAccessGranted: boolean;
+  clearanceExpiryDate: string;
+}
+
+interface ShiftRoster {
+  id: string;
+  date: string;
+  shiftName: string;
+  lineLocation: string;
+  lineLeader: string;
+  assignedStaffCount: number;
+  cleanroomGrade: string;
+  assignedOperators: Array<{
+    employeeId: string;
+    employeeName: string;
+    position: string;
+    machineQualification: string;
+  }>;
+}
+
+interface SkillCompetency {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  skills: Array<{
+    machineOrProcess: string;
+    qualificationLevel: string;
+    certifiedDate: string;
+    certExpiryDate: string;
+  }>;
+}
+
 export const HrisExplorer: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'employees' | 'attendance' | 'leave_ot' | 'payroll' | 'training' | 'performance' | 'ess_mss' | 'ai_hr'>('dashboard');
+  const [activeTab, setActiveTab] = useState<
+    | 'dashboard'
+    | 'cleanroom_clearance'
+    | 'shift_roster'
+    | 'employees'
+    | 'attendance'
+    | 'leave_ot'
+    | 'payroll'
+    | 'skill_matrix'
+    | 'training'
+    | 'performance'
+    | 'ess_mss'
+    | 'ai_hr'
+  >('dashboard');
+
+  const tabsRef = React.useRef<HTMLDivElement>(null);
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabsRef.current) {
+      tabsRef.current.scrollBy({
+        left: direction === 'left' ? -280 : 280,
+        behavior: 'smooth',
+      });
+    }
+  };
 
   // Data states
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -163,6 +236,9 @@ export const HrisExplorer: React.FC = () => {
   const [payroll, setPayroll] = useState<PayrollTransaction[]>([]);
   const [trainings, setTrainings] = useState<TrainingProgram[]>([]);
   const [kpis, setKpis] = useState<PerformanceKpi[]>([]);
+  const [cleanroomClearances, setCleanroomClearances] = useState<CleanroomClearance[]>([]);
+  const [shiftRosters, setShiftRosters] = useState<ShiftRoster[]>([]);
+  const [skillCompetencies, setSkillCompetencies] = useState<SkillCompetency[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [notification, setNotification] = useState<string | null>(null);
 
@@ -171,6 +247,8 @@ export const HrisExplorer: React.FC = () => {
   const [deptFilter, setDeptFilter] = useState('All');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
+  const [showAddClearanceModal, setShowAddClearanceModal] = useState(false);
+  const [showAddRosterModal, setShowAddRosterModal] = useState(false);
   const [selectedPayslip, setSelectedPayslip] = useState<PayrollTransaction | null>(null);
 
   // Forms
@@ -186,6 +264,27 @@ export const HrisExplorer: React.FC = () => {
     positionAllowanceIdr: 800000,
   });
 
+  const [newClrForm, setNewClrForm] = useState({
+    employeeId: '',
+    cleanroomGradeAccess: 'Grade B (Aseptic Mixing)',
+    gowningScorePct: 98,
+    medicalStatus: 'Cleared (Fit for Cleanroom)',
+  });
+
+  const [newRosterForm, setNewRosterForm] = useState({
+    date: new Date().toISOString().substring(0, 10),
+    shiftName: 'Shift 1 (07:00 - 15:00)',
+    lineLocation: 'Cleanroom Processing Line 1 (Mixing & Filling)',
+    lineLeader: 'Agus Santoso (Prod SPV)',
+    cleanroomGrade: 'Grade B & C',
+  });
+
+  // AI Predictor state
+  const [aiTargetLine, setAiTargetLine] = useState('Cleanroom Mixing Line 1');
+  const [aiBatchCount, setAiBatchCount] = useState(6);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<any>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
   const [checkInMethod, setCheckInMethod] = useState<'Face Recognition' | 'GPS Mobile ESS' | 'Fingerprint'>('Face Recognition');
 
   const showToast = (msg: string) => {
@@ -196,7 +295,7 @@ export const HrisExplorer: React.FC = () => {
   const fetchHrisData = async () => {
     setIsLoading(true);
     try {
-      const [empRes, attRes, lvRes, otRes, payRes, trRes, kpiRes] = await Promise.all([
+      const [empRes, attRes, lvRes, otRes, payRes, trRes, kpiRes, clrRes, rstRes, skRes] = await Promise.all([
         fetch('/api/employees'),
         fetch('/api/attendance'),
         fetch('/api/leaves'),
@@ -204,6 +303,9 @@ export const HrisExplorer: React.FC = () => {
         fetch('/api/payroll'),
         fetch('/api/training'),
         fetch('/api/performance'),
+        fetch('/api/cleanroom/clearance'),
+        fetch('/api/roster'),
+        fetch('/api/skill-matrix'),
       ]);
 
       if (empRes.ok) setEmployees((await empRes.json()).data || []);
@@ -213,6 +315,9 @@ export const HrisExplorer: React.FC = () => {
       if (payRes.ok) setPayroll((await payRes.json()).data || []);
       if (trRes.ok) setTrainings((await trRes.json()).data || []);
       if (kpiRes.ok) setKpis((await kpiRes.json()).data || []);
+      if (clrRes.ok) setCleanroomClearances((await clrRes.json()).data || []);
+      if (rstRes.ok) setShiftRosters((await rstRes.json()).data || []);
+      if (skRes.ok) setSkillCompetencies((await skRes.json()).data || []);
     } catch (err) {
       console.error('Failed to fetch HRIS data:', err);
     } finally {
@@ -284,6 +389,71 @@ export const HrisExplorer: React.FC = () => {
     }
   };
 
+  const handleCreateClearance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/cleanroom/clearance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newClrForm),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message);
+        setShowAddClearanceModal(false);
+        fetchHrisData();
+      } else {
+        showToast('Gagal menerbitkan sertifikasi cleanroom.');
+      }
+    } catch (err) {
+      showToast('Terjadi kesalahan koneksi.');
+    }
+  };
+
+  const handleCreateRoster = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/roster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRosterForm),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message);
+        setShowAddRosterModal(false);
+        fetchHrisData();
+      } else {
+        showToast('Gagal membuat shift roster.');
+      }
+    } catch (err) {
+      showToast('Terjadi kesalahan koneksi.');
+    }
+  };
+
+  const handleRunAiPrediction = async () => {
+    setIsAiLoading(true);
+    try {
+      const res = await fetch('/api/ai-hr/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetLine: aiTargetLine,
+          upcomingBatchCount: aiBatchCount,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAiAnalysisResult(data.analysis);
+        showToast('Analisis AI Manpower & CPKB Selesai!');
+      }
+    } catch (err) {
+      showToast('Gagal menjalankan simulasi AI.');
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   // Filtered employees
   const filteredEmployees = employees.filter((e) => {
     const matchSearch = e.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || e.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
@@ -320,17 +490,31 @@ export const HrisExplorer: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setShowAddClearanceModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-xs transition shadow-md"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Clearance Cleanroom</span>
+          </button>
+          <button
+            onClick={() => setShowAddRosterModal(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium text-xs transition shadow-md"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Jadwal Roster</span>
+          </button>
           <button
             onClick={() => setShowAddEmployeeModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-medium text-sm transition shadow-lg shadow-purple-600/30"
+            className="flex items-center gap-2 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-medium text-xs transition shadow-md"
           >
             <UserPlus className="w-4 h-4" />
-            <span>Tambah Karyawan</span>
+            <span>Tambah Staff</span>
           </button>
           <button
             onClick={fetchHrisData}
-            className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition"
+            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition"
             title="Refresh Data"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -338,36 +522,69 @@ export const HrisExplorer: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-6 border-b border-slate-800 scrollbar-none">
-        {[
-          { id: 'dashboard', label: 'HR Dashboard', icon: BarChart2 },
-          { id: 'employees', label: 'Employee Master', icon: Users },
-          { id: 'attendance', label: 'Attendance & Shift', icon: CalendarCheck },
-          { id: 'leave_ot', label: 'Cuti & Lembur (SPL)', icon: Clock },
-          { id: 'payroll', label: 'Payroll Engine', icon: DollarSign },
-          { id: 'training', label: 'Training & Kualifikasi', icon: Award },
-          { id: 'performance', label: 'KPI & OKR Talent', icon: TrendingUp },
-          { id: 'ess_mss', label: 'ESS / MSS Portal', icon: Briefcase },
-          { id: 'ai_hr', label: 'AI HR Assistant', icon: Bot },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap transition-all ${
-                isActive
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 font-semibold'
-                  : 'bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/40'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+      {/* Navigation Tabs Container with Interactive Scroll Arrows */}
+      <div className="relative flex items-center gap-1.5 mb-6 pb-2 border-b border-slate-800">
+        <button
+          type="button"
+          onClick={() => scrollTabs('left')}
+          className="flex-shrink-0 p-2.5 bg-slate-800 hover:bg-purple-600/80 text-slate-300 hover:text-white rounded-xl border border-slate-700 shadow-md transition-all z-10"
+          title="Geser Menu ke Kiri"
+          aria-label="Geser Menu ke Kiri"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <div
+          ref={tabsRef}
+          onWheel={(e) => {
+            if (e.deltaY !== 0 && tabsRef.current) {
+              tabsRef.current.scrollLeft += e.deltaY;
+            }
+          }}
+          className="flex items-center gap-2 overflow-x-auto py-1 scroll-smooth touch-pan-x custom-scrollbar flex-1 scrollbar-none"
+        >
+          {[
+            { id: 'dashboard', label: 'HR Dashboard', icon: BarChart2 },
+            { id: 'cleanroom_clearance', label: 'Cleanroom & Gowning', icon: ShieldCheck },
+            { id: 'shift_roster', label: 'Shift Roster & Line', icon: Calendar },
+            { id: 'employees', label: 'Employee Master', icon: Users },
+            { id: 'attendance', label: 'Attendance & Gate', icon: CalendarCheck },
+            { id: 'leave_ot', label: 'Cuti & Lembur (SPL)', icon: Clock },
+            { id: 'payroll', label: 'Payroll Engine', icon: DollarSign },
+            { id: 'skill_matrix', label: 'Skill Matrix Mesin', icon: Cpu },
+            { id: 'training', label: 'Training CPKB', icon: Award },
+            { id: 'performance', label: 'KPI Talent', icon: TrendingUp },
+            { id: 'ess_mss', label: 'ESS / MSS Portal', icon: Briefcase },
+            { id: 'ai_hr', label: 'AI HR Analytics', icon: Bot },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap flex-shrink-0 transition-all ${
+                  isActive
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30 font-semibold ring-1 ring-purple-400/50'
+                    : 'bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/40'
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => scrollTabs('right')}
+          className="flex-shrink-0 p-2.5 bg-slate-800 hover:bg-purple-600/80 text-slate-300 hover:text-white rounded-xl border border-slate-700 shadow-md transition-all z-10"
+          title="Geser Menu ke Kanan"
+          aria-label="Geser Menu ke Kanan"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* MAIN TAB CONTENT */}
@@ -485,6 +702,144 @@ export const HrisExplorer: React.FC = () => {
                 <span className="text-emerald-400 font-semibold">Tersinkronisasi</span>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: CLEANROOM & GOWNING CLEARANCE */}
+      {activeTab === 'cleanroom_clearance' && (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800/80 p-6 rounded-2xl border border-slate-700 shadow-xl">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="w-6 h-6 text-emerald-400" />
+                <span>Cleanroom Gowning & Medical Clearance (CPKB / GMP)</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Verifikasi kelayakan medis (swab test), kompetensi gowning steril, dan hak akses Air Shower Gate untuk Operator Cleanroom Grade A/B/C/D.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowAddClearanceModal(true)}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Sertifikasi Clearance Baru</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {cleanroomClearances.map((clr) => (
+              <div key={clr.id} className="bg-slate-800/80 p-5 rounded-2xl border border-slate-700 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-purple-950 text-purple-300 border border-purple-800">
+                    {clr.cleanroomGradeAccess}
+                  </span>
+                  <span className="text-xs font-mono text-emerald-400 font-bold">{clr.id}</span>
+                </div>
+
+                <div>
+                  <h3 className="font-bold text-white text-base">{clr.employeeName}</h3>
+                  <div className="text-xs text-slate-400 font-mono mt-0.5">{clr.employeeId} • {clr.department}</div>
+                </div>
+
+                <div className="p-3 bg-slate-900/80 rounded-xl space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Skor Gowning Steril:</span>
+                    <strong className="text-emerald-400 font-mono text-sm">{clr.gowningCompetencyScorePct}%</strong>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Status Clearance Medis:</span>
+                    <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800 rounded">
+                      {clr.medicalClearanceStatus}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Hasil Swab Test Kulit/Kuku:</span>
+                    <span className="text-slate-200 font-medium">{clr.swabTestResult} ({clr.lastSwabTestDate})</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                    <span className="text-slate-400">Air Shower Access Gate:</span>
+                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Terverifikasi
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1">
+                  <span>Masa Berlaku Clearance:</span>
+                  <span className="font-mono text-purple-300 font-semibold">{clr.clearanceExpiryDate}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: SHIFT ROSTER & LINE ALLOCATION */}
+      {activeTab === 'shift_roster' && (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-800/80 p-6 rounded-2xl border border-slate-700 shadow-xl">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Calendar className="w-6 h-6 text-blue-400" />
+                <span>Shift Roster & Cleanroom Line Staff Allocation</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Penjadwalan Shift 1, 2, 3 dan alokasi operator bersertifikasi khusus ke lini produksi cleanroom MES.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowAddRosterModal(true)}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-600/30 transition"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Buat Roster Shift Baru</span>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {shiftRosters.map((rst) => (
+              <div key={rst.id} className="bg-slate-800/80 p-6 rounded-2xl border border-slate-700 space-y-4 shadow-xl">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-700 pb-3">
+                  <div>
+                    <span className="text-xs font-mono text-purple-400 font-bold">{rst.id}</span>
+                    <h3 className="text-lg font-bold text-white mt-0.5">{rst.lineLocation}</h3>
+                    <div className="text-xs text-slate-400">
+                      Tingkat Cleanroom: <strong className="text-purple-300">{rst.cleanroomGrade}</strong> • Leader: <strong className="text-slate-200">{rst.lineLeader}</strong>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1 bg-blue-950 text-blue-300 border border-blue-800 rounded-full text-xs font-bold">
+                      {rst.shiftName}
+                    </span>
+                    <span className="text-xs text-slate-300 font-mono">
+                      Tanggal: <strong className="text-white">{rst.date}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Operator Bertugas di Lini Ini:</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {rst.assignedOperators.map((op, idx) => (
+                      <div key={idx} className="p-3 bg-slate-900/80 rounded-xl border border-slate-700 flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-white text-sm">{op.employeeName}</div>
+                          <div className="text-xs text-slate-400">{op.position}</div>
+                        </div>
+                        <span className="px-2 py-0.5 text-[11px] bg-emerald-950 text-emerald-300 border border-emerald-800 rounded">
+                          {op.machineQualification}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -823,6 +1178,49 @@ export const HrisExplorer: React.FC = () => {
         </div>
       )}
 
+      {/* TAB: SKILL MATRIX */}
+      {activeTab === 'skill_matrix' && (
+        <div className="space-y-6">
+          <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-700 shadow-xl">
+            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <Cpu className="w-6 h-6 text-purple-400" />
+              <span>Matriks Kompetensi Operator Mesin & CPKB</span>
+            </h2>
+            <p className="text-xs text-slate-400 mb-6">
+              Kualifikasi teknis operator pada mesin produksi utama (Vacuum Homogenizer, Filling Tube, HPLC Lab, Incubator).
+            </p>
+
+            <div className="space-y-4">
+              {skillCompetencies.map((sk) => (
+                <div key={sk.id} className="p-5 bg-slate-900/80 rounded-2xl border border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <div>
+                      <h3 className="font-bold text-white text-base">{sk.employeeName}</h3>
+                      <div className="text-xs text-slate-400 font-mono">{sk.employeeId} • {sk.department}</div>
+                    </div>
+                    <span className="text-xs font-mono text-purple-400 font-bold">{sk.id}</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {sk.skills.map((s, idx) => (
+                      <div key={idx} className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/80 space-y-1">
+                        <div className="text-xs font-bold text-slate-200">{s.machineOrProcess}</div>
+                        <div className="flex items-center justify-between text-[11px] pt-1">
+                          <span className="px-2 py-0.5 rounded bg-purple-950 text-purple-300 font-semibold border border-purple-800">
+                            {s.qualificationLevel}
+                          </span>
+                          <span className="text-slate-400 font-mono">Exp: {s.certExpiryDate}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAB 6: TRAINING & COMPETENCY */}
       {activeTab === 'training' && (
         <div className="space-y-6">
@@ -942,11 +1340,77 @@ export const HrisExplorer: React.FC = () => {
           <div className="flex items-center gap-3 border-b border-slate-700 pb-4">
             <Bot className="w-8 h-8 text-purple-400 animate-pulse" />
             <div>
-              <h2 className="text-xl font-bold text-white">AI HR Assistant & Predictive Analytics</h2>
+              <h2 className="text-xl font-bold text-white">AI HR Assistant & Predictive Manpower Analytics</h2>
               <p className="text-xs text-slate-400">
-                Analisis AI Otomatis Kebutuhan Tenaga Kerja, skill gap manufaktur kosmetik, dan optimasi jadwal produksi.
+                Simulasi Otomatis Kebutuhan Tenaga Kerja Cleanroom, skill gap operator, dan rekomendasi lembur berdasarkan jadwal MES.
               </p>
             </div>
+          </div>
+
+          {/* Interactive AI Simulation Form */}
+          <div className="p-5 bg-slate-900/90 rounded-2xl border border-purple-500/30 space-y-4">
+            <h3 className="font-bold text-white text-sm flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span>Simulasi AI Kebutuhan Operator MES & Cleanroom</span>
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Target Lini Produksi MES</label>
+                <select
+                  value={aiTargetLine}
+                  onChange={(e) => setAiTargetLine(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                >
+                  <option value="Cleanroom Processing Line 1 (Mixing & Filling)">Cleanroom Line 1 (Mixing & Filling)</option>
+                  <option value="Cleanroom Packaging Line 2 (Tube & Box)">Cleanroom Line 2 (Packaging)</option>
+                  <option value="R&D Pilot Plant Formula Lab">R&D Pilot Plant Lab</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Rencana Batch Minggu Depan</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={aiBatchCount}
+                  onChange={(e) => setAiBatchCount(Number(e.target.value))}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-end">
+                <button
+                  onClick={handleRunAiPrediction}
+                  disabled={isAiLoading}
+                  className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-purple-600/30 transition flex items-center justify-center gap-2"
+                >
+                  <Bot className={`w-4 h-4 ${isAiLoading ? 'animate-spin' : ''}`} />
+                  <span>{isAiLoading ? 'Menganalisis...' : 'Jalankan Simulasi AI'}</span>
+                </button>
+              </div>
+            </div>
+
+            {aiAnalysisResult && (
+              <div className="p-4 bg-purple-950/40 border border-purple-500/40 rounded-xl space-y-2 text-xs text-purple-100 animate-fadeIn">
+                <div className="font-bold text-sm text-purple-200 flex items-center justify-between">
+                  <span>Hasil Analisis AI: {aiAnalysisResult.targetLine}</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 text-[11px]">
+                    {aiAnalysisResult.manpowerStatus}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-purple-500/30">
+                  <div>Rencana Batch: <strong className="text-white">{aiAnalysisResult.plannedBatches} Batch</strong></div>
+                  <div>Rekomendasi Operator: <strong className="text-emerald-300">{aiAnalysisResult.recommendedStaffCount} Orang</strong></div>
+                  <div>Tersedia Certified: <strong className="text-purple-300">{aiAnalysisResult.availableCertifiedStaff} Orang</strong></div>
+                  <div>CPKB Compliance: <strong className="text-emerald-300">{aiAnalysisResult.cpkbComplianceCheck}</strong></div>
+                </div>
+                <div className="pt-2 text-slate-300 italic bg-slate-900/60 p-2.5 rounded-lg border border-slate-700/60">
+                  💡 <strong>Rekomendasi Pelatihan AI:</strong> {aiAnalysisResult.trainingRecommendation}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1163,6 +1627,179 @@ export const HrisExplorer: React.FC = () => {
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD CLEANROOM CLEARANCE */}
+      {showAddClearanceModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                <span>Terbitkan Clearance Cleanroom Baru</span>
+              </h3>
+              <button onClick={() => setShowAddClearanceModal(false)} className="text-slate-400 hover:text-white">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateClearance} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Pilih Karyawan</label>
+                <select
+                  required
+                  value={newClrForm.employeeId}
+                  onChange={(e) => setNewClrForm({ ...newClrForm, employeeId: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-purple-500"
+                >
+                  <option value="">-- Pilih Operator / Staff --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.employeeId}>
+                      {emp.fullName} ({emp.employeeId} - {emp.department})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Akses Kelas Cleanroom (Grade Access)</label>
+                <select
+                  value={newClrForm.cleanroomGradeAccess}
+                  onChange={(e) => setNewClrForm({ ...newClrForm, cleanroomGradeAccess: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none"
+                >
+                  <option value="Grade A/B (Aseptic Filling & Mixing)">Grade A/B (Aseptic Filling & Mixing)</option>
+                  <option value="Grade B (Aseptic Processing)">Grade B (Aseptic Processing)</option>
+                  <option value="Grade C (Bulk Formulation)">Grade C (Bulk Formulation)</option>
+                  <option value="Grade D (Secondary Packaging)">Grade D (Secondary Packaging)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Skor Ujian Gowning (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={newClrForm.gowningScorePct}
+                    onChange={(e) => setNewClrForm({ ...newClrForm, gowningScorePct: Number(e.target.value) })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Status Kesehatan Medis</label>
+                  <input
+                    type="text"
+                    value={newClrForm.medicalStatus}
+                    onChange={(e) => setNewClrForm({ ...newClrForm, medicalStatus: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setShowAddClearanceModal(false)}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-medium"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/30"
+                >
+                  Terbitkan Clearance
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD SHIFT ROSTER */}
+      {showAddRosterModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-blue-400" />
+                <span>Buat Jadwal Roster Shift Baru</span>
+              </h3>
+              <button onClick={() => setShowAddRosterModal(false)} className="text-slate-400 hover:text-white">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRoster} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Tanggal Roster</label>
+                  <input
+                    type="date"
+                    required
+                    value={newRosterForm.date}
+                    onChange={(e) => setNewRosterForm({ ...newRosterForm, date: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Shift Kerja</label>
+                  <select
+                    value={newRosterForm.shiftName}
+                    onChange={(e) => setNewRosterForm({ ...newRosterForm, shiftName: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none"
+                  >
+                    <option value="Shift 1 (07:00 - 15:00)">Shift 1 (07:00 - 15:00)</option>
+                    <option value="Shift 2 (15:00 - 23:00)">Shift 2 (15:00 - 23:00)</option>
+                    <option value="Shift 3 (23:00 - 07:00)">Shift 3 (23:00 - 07:00)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Lokasi Lini Produksi MES</label>
+                <input
+                  type="text"
+                  required
+                  value={newRosterForm.lineLocation}
+                  onChange={(e) => setNewRosterForm({ ...newRosterForm, lineLocation: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Supervisor / Line Leader</label>
+                <input
+                  type="text"
+                  required
+                  value={newRosterForm.lineLeader}
+                  onChange={(e) => setNewRosterForm({ ...newRosterForm, lineLeader: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setShowAddRosterModal(false)}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-medium"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/30"
+                >
+                  Simpan Jadwal Roster
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

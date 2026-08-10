@@ -50,7 +50,7 @@ import {
   MOCK_BATCHES,
   MOCK_BPOM_SUBMISSIONS,
 } from './data/mockErpData';
-import { Formula, ThemeMode } from './types';
+import { Formula, ThemeMode, UserProfilePersona, PRESET_USER_PERSONAS } from './types';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<ViewTab>('dashboard');
@@ -58,6 +58,7 @@ export default function App() {
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'register'>('login');
   const [activeCompanyPage, setActiveCompanyPage] = useState('about');
   const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfilePersona>(PRESET_USER_PERSONAS[2]); // Default Apt. Clara
 
   const [theme, setTheme] = useState<ThemeMode>('dark');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -73,6 +74,13 @@ export default function App() {
 
   const handleAnalyzeFormula = (formula: Formula) => {
     setCurrentTab('ai-center');
+  };
+
+  const handleSelectUserPersona = (persona: UserProfilePersona) => {
+    setCurrentUser(persona);
+    if (persona.allowedTabs && persona.allowedTabs.length > 0 && !persona.allowedTabs.includes(currentTab)) {
+      setCurrentTab(persona.allowedTabs[0] as ViewTab);
+    }
   };
 
   const handleOpenAuth = (mode: 'login' | 'register') => {
@@ -210,18 +218,29 @@ export default function App() {
         tenant={tenant}
         license={license}
         theme={theme}
+        currentUser={currentUser}
         onToggleTheme={toggleTheme}
         onOpenAiCenter={() => setCurrentTab('ai-center')}
         onOpenBlueprint={() => setCurrentTab('blueprint')}
         onOpenSearch={() => setIsSearchOpen(true)}
         onGoToLanding={() => setAppMode('landing')}
+        onSelectUserPersona={handleSelectUserPersona}
+        onOpenAuthPortal={handleOpenAuth}
+        onOpenUserSettings={() => {
+          setAppMode('workspace');
+          setCurrentTab('user-settings');
+        }}
+        onLogout={() => {
+          setAppMode('auth');
+          setAuthInitialMode('login');
+        }}
         activeViewTitle={getTabTitle(currentTab)}
       />
 
       {/* Main Container Layout */}
       <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
         {/* Left Sidebar */}
-        <Sidebar currentTab={currentTab} onSelectTab={handleSelectTabWithModeSwitch} />
+        <Sidebar currentTab={currentTab} onSelectTab={handleSelectTabWithModeSwitch} currentUser={currentUser} />
 
         {/* Right Main Content Panel */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-slate-950/90 dark:bg-slate-950">

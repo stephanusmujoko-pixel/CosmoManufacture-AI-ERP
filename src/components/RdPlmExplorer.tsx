@@ -18,6 +18,7 @@ import {
   Users,
   Calendar,
   Layers,
+  ChevronLeft,
   ChevronRight,
   ShieldCheck,
   Award,
@@ -36,6 +37,9 @@ import {
   QrCode,
   Sliders,
   Zap,
+  Thermometer,
+  Activity,
+  HeartPulse,
 } from 'lucide-react';
 
 export function RdPlmExplorer() {
@@ -44,6 +48,9 @@ export function RdPlmExplorer() {
     | 'ideas'
     | 'projects'
     | 'experiments'
+    | 'stability'
+    | 'inci-safety'
+    | 'sensory-clinical'
     | 'pilot'
     | 'packaging'
     | 'samples'
@@ -53,6 +60,16 @@ export function RdPlmExplorer() {
     | 'documents'
     | 'ai-assistant'
   >('overview');
+
+  const tabsRef = React.useRef<HTMLDivElement>(null);
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabsRef.current) {
+      tabsRef.current.scrollBy({
+        left: direction === 'left' ? -280 : 280,
+        behavior: 'smooth',
+      });
+    }
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('All');
@@ -70,14 +87,43 @@ export function RdPlmExplorer() {
   const [competitors, setCompetitors] = useState<any[]>([]);
   const [ecrEcoList, setEcrEcoList] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [stabilityProtocols, setStabilityProtocols] = useState<any[]>([]);
+  const [inciItems, setInciItems] = useState<any[]>([]);
+  const [sensoryPanels, setSensoryPanels] = useState<any[]>([]);
   const [kpiData, setKpiData] = useState<any>(null);
 
-  // Modals
+  // Modals & Interactive View States
   const [showNewIdeaModal, setShowNewIdeaModal] = useState(false);
   const [newIdeaTitle, setNewIdeaTitle] = useState('');
   const [newIdeaDesc, setNewIdeaDesc] = useState('');
   const [newIdeaCategory, setNewIdeaCategory] = useState('Skincare');
   const [newIdeaCost, setNewIdeaCost] = useState(135000);
+
+  // Stage Gate Modal
+  const [selectedGateProject, setSelectedGateProject] = useState<any | null>(null);
+
+  // New Trial / Experiment Modal
+  const [showNewTrialModal, setShowNewTrialModal] = useState(false);
+  const [trialFormulaName, setTrialFormulaName] = useState('');
+  const [trialVariant, setTrialVariant] = useState('v1.0');
+  const [trialTargetPh, setTrialTargetPh] = useState(5.5);
+  const [trialTargetViscosity, setTrialTargetViscosity] = useState('3200 cPs');
+  const [trialBatchSize, setTrialBatchSize] = useState(5);
+
+  // New Stability Modal
+  const [showNewStabilityModal, setShowNewStabilityModal] = useState(false);
+  const [stabFormulaCode, setStabFormulaCode] = useState('EXP-SUN-V3');
+  const [stabProductName, setStabProductName] = useState('Sunscreen Mist SPF 50');
+  const [stabCondition, setStabCondition] = useState('Accelerated (40°C / 75% RH)');
+
+  // Artwork Proofing Modal
+  const [selectedArtworkPkg, setSelectedArtworkPkg] = useState<any | null>(null);
+
+  // New ECR Modal
+  const [showNewEcrModal, setShowNewEcrModal] = useState(false);
+  const [ecrTitle, setEcrTitle] = useState('');
+  const [ecrProduct, setEcrProduct] = useState('Sunscreen Mist SPF 50');
+  const [ecrReason, setEcrReason] = useState('');
 
   // AI Assistant State
   const [aiPromptCategory, setAiPromptCategory] = useState('Sunscreen Mist');
@@ -100,21 +146,27 @@ export function RdPlmExplorer() {
         compRes,
         ecrRes,
         docRes,
+        stabRes,
+        inciRes,
+        sensRes,
       ] = await Promise.all([
-        fetch('/api/rd').then((r) => r.json()),
-        fetch('/api/ideas').then((r) => r.json()),
-        fetch('/api/projects').then((r) => r.json()),
-        fetch('/api/formula-experiments').then((r) => r.json()),
-        fetch('/api/laboratory-trials').then((r) => r.json()),
-        fetch('/api/pilot-batches').then((r) => r.json()),
-        fetch('/api/packaging').then((r) => r.json()),
-        fetch('/api/samples').then((r) => r.json()),
-        fetch('/api/competitors').then((r) => r.json()),
-        fetch('/api/ecr').then((r) => r.json()),
-        fetch('/api/rd-documents').then((r) => r.json()),
+        fetch('/api/rd').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/ideas').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/projects').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/formula-experiments').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/laboratory-trials').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/pilot-batches').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/packaging').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/samples').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/competitors').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/ecr').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/rd-documents').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/stability-protocols').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/inci-safety').then((r) => r.json()).catch(() => ({})),
+        fetch('/api/sensory-clinical').then((r) => r.json()).catch(() => ({})),
       ]);
 
-      setKpiData(rdRes.kpis);
+      setKpiData(rdRes.kpis || null);
       setIdeas(ideasRes.ideas || []);
       setProjects(projectsRes.projects || []);
       setExperiments(expRes.experiments || []);
@@ -125,6 +177,9 @@ export function RdPlmExplorer() {
       setCompetitors(compRes.competitors || []);
       setEcrEcoList(ecrRes.changeRequests || []);
       setDocuments(docRes.documents || []);
+      setStabilityProtocols(stabRes.stabilityProtocols || []);
+      setInciItems(inciRes.inciItems || []);
+      setSensoryPanels(sensRes.panels || []);
     } catch (err) {
       console.error('Failed to load R&D data from API:', err);
     } finally {
@@ -171,6 +226,93 @@ export function RdPlmExplorer() {
       }
     } catch (err) {
       console.error('Error creating idea:', err);
+    }
+  };
+
+  // Submit New Lab Trial
+  const handleCreateTrial = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trialFormulaName) return;
+
+    try {
+      const res = await fetch('/api/laboratory-trials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          formulaName: trialFormulaName,
+          variant: trialVariant,
+          phResult: trialTargetPh,
+          viscosityResult: trialTargetViscosity,
+          batchSizeKg: trialBatchSize,
+          appearance: 'Homogenous fine emulsion',
+          microbiologyStatus: 'Passed Zero-Growth',
+          formulator: 'Dr. Audrey Widjaja',
+          status: 'Passed QC Lab',
+        }),
+      });
+      if (res.ok) {
+        showToast(`Trial formula lab baru berhasil di-log: ${trialFormulaName}`);
+        setShowNewTrialModal(false);
+        setTrialFormulaName('');
+        fetchData();
+      }
+    } catch (err) {
+      showToast('Gagal menyimpan trial lab.');
+    }
+  };
+
+  // Submit New Stability Protocol
+  const handleCreateStability = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/stability-protocols', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          formulaCode: stabFormulaCode,
+          productName: stabProductName,
+          testCondition: stabCondition,
+          durationMonths: 6,
+          phDrift: '5.5 -> 5.51 (Stable)',
+          viscosityChange: '3,200 cPs (No degradation)',
+        }),
+      });
+      if (res.ok) {
+        showToast(`Protokol stabilitas baru berhasil didaftarkan untuk ${stabProductName}`);
+        setShowNewStabilityModal(false);
+        fetchData();
+      }
+    } catch (err) {
+      showToast('Gagal mendaftarkan protokol stabilitas.');
+    }
+  };
+
+  // Submit New ECR
+  const handleCreateEcr = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ecrTitle) return;
+
+    try {
+      const res = await fetch('/api/ecr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: ecrTitle,
+          impactedProduct: ecrProduct,
+          reason: ecrReason,
+          requestedBy: 'R&D Senior Specialist',
+          changeCategory: 'Raw Material Substitute',
+        }),
+      });
+      if (res.ok) {
+        showToast(`Pengajuan ECR baru berhasil dikirim: ${ecrTitle}`);
+        setShowNewEcrModal(false);
+        setEcrTitle('');
+        setEcrReason('');
+        fetchData();
+      }
+    } catch (err) {
+      showToast('Gagal mengajukan ECR.');
     }
   };
 
@@ -285,48 +427,81 @@ export function RdPlmExplorer() {
         </div>
       </div>
 
-      {/* Main Tab Navigation */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-800 text-sm scrollbar-thin">
-        {[
-          { id: 'overview', label: 'R&D Dashboard', icon: BarChart3 },
-          { id: 'ideas', label: 'Idea Board', icon: Lightbulb, badge: ideas.length },
-          { id: 'projects', label: 'NPD Projects', icon: Layers, badge: projects.length },
-          { id: 'experiments', label: 'Formula & Trials', icon: FlaskConical, badge: labTrials.length },
-          { id: 'pilot', label: 'Pilot Scale-Up', icon: Factory, badge: pilotBatches.length },
-          { id: 'packaging', label: 'Packaging & Artwork', icon: Boxes, badge: packagingList.length },
-          { id: 'samples', label: 'Sample Tracking', icon: PackageCheck, badge: samples.length },
-          { id: 'competitors', label: 'Competitor Analysis', icon: TrendingUp },
-          { id: 'plm-costing', label: 'PLM & COGM Costing', icon: DollarSign },
-          { id: 'change-mgmt', label: 'Change (ECR/ECO)', icon: Sliders, badge: ecrEcoList.length },
-          { id: 'documents', label: 'Document Vault', icon: FileText, badge: documents.length },
-          { id: 'ai-assistant', label: 'AI R&D Synthesizer', icon: Sparkles },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-medium transition-all whitespace-nowrap cursor-pointer ${
-                isActive
-                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/40 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
-              <span>{tab.label}</span>
-              {tab.badge !== undefined && (
-                <span
-                  className={`px-1.5 py-0.5 text-xs rounded-full ${
-                    isActive ? 'bg-emerald-500/30 text-emerald-300' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* Main Tab Navigation Container with Interactive Scroll Arrows */}
+      <div className="relative flex items-center gap-1.5 mb-6 pb-2 border-b border-slate-800">
+        <button
+          type="button"
+          onClick={() => scrollTabs('left')}
+          className="flex-shrink-0 p-2.5 bg-slate-800 hover:bg-emerald-600/80 text-slate-300 hover:text-white rounded-xl border border-slate-700 shadow-md transition-all z-10"
+          title="Geser Menu ke Kiri"
+          aria-label="Geser Menu ke Kiri"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <div
+          ref={tabsRef}
+          onWheel={(e) => {
+            if (e.deltaY !== 0 && tabsRef.current) {
+              tabsRef.current.scrollLeft += e.deltaY;
+            }
+          }}
+          className="flex items-center gap-2 overflow-x-auto py-1 scroll-smooth touch-pan-x custom-scrollbar flex-1 scrollbar-none"
+        >
+          {[
+            { id: 'overview', label: 'R&D Dashboard', icon: BarChart3 },
+            { id: 'ideas', label: 'Idea Board', icon: Lightbulb, badge: ideas.length },
+            { id: 'projects', label: 'NPD Projects', icon: Layers, badge: projects.length },
+            { id: 'experiments', label: 'Formula & Trials', icon: FlaskConical, badge: labTrials.length },
+            { id: 'stability', label: 'Stability Testing', icon: Thermometer, badge: stabilityProtocols.length },
+            { id: 'inci-safety', label: 'INCI & BPOM Safety', icon: ShieldCheck, badge: inciItems.length },
+            { id: 'sensory-clinical', label: 'Sensory & Clinical', icon: HeartPulse, badge: sensoryPanels.length },
+            { id: 'pilot', label: 'Pilot Scale-Up', icon: Factory, badge: pilotBatches.length },
+            { id: 'packaging', label: 'Packaging & Artwork', icon: Boxes, badge: packagingList.length },
+            { id: 'samples', label: 'Sample Tracking', icon: PackageCheck, badge: samples.length },
+            { id: 'competitors', label: 'Competitor Analysis', icon: TrendingUp },
+            { id: 'plm-costing', label: 'PLM & COGM Costing', icon: DollarSign },
+            { id: 'change-mgmt', label: 'Change (ECR/ECO)', icon: Sliders, badge: ecrEcoList.length },
+            { id: 'documents', label: 'Document Vault', icon: FileText, badge: documents.length },
+            { id: 'ai-assistant', label: 'AI R&D Synthesizer', icon: Sparkles },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-medium transition-all whitespace-nowrap flex-shrink-0 cursor-pointer ${
+                  isActive
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/40 shadow-sm font-semibold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+                {tab.badge !== undefined && (
+                  <span
+                    className={`px-1.5 py-0.5 text-xs rounded-full ${
+                      isActive ? 'bg-emerald-500/30 text-emerald-300' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => scrollTabs('right')}
+          className="flex-shrink-0 p-2.5 bg-slate-800 hover:bg-emerald-600/80 text-slate-300 hover:text-white rounded-xl border border-slate-700 shadow-md transition-all z-10"
+          title="Geser Menu ke Kanan"
+          aria-label="Geser Menu ke Kanan"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* SEARCH AND FILTER BAR */}
@@ -685,8 +860,11 @@ export function RdPlmExplorer() {
                     <span className="text-xs px-3 py-1 rounded-full font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
                       Current Stage: {proj.stage}
                     </span>
-                    <button className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 cursor-pointer">
-                      View Gate Checklist
+                    <button
+                      onClick={() => setSelectedGateProject(proj)}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <CheckSquare className="w-3.5 h-3.5 text-emerald-400" /> View Gate Checklist
                     </button>
                   </div>
                 </div>
@@ -742,6 +920,12 @@ export function RdPlmExplorer() {
               </h2>
               <p className="text-xs text-slate-400">Variant adjustments, pH/viscosity predictions, and trial log results.</p>
             </div>
+            <button
+              onClick={() => setShowNewTrialModal(true)}
+              className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-cyan-500/20"
+            >
+              <Plus className="w-4 h-4" /> New Lab Trial
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -799,6 +983,205 @@ export function RdPlmExplorer() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4.5 STABILITY TESTING PROTOCOLS */}
+      {activeTab === 'stability' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Thermometer className="w-5 h-5 text-amber-400" /> Stability Testing & Shelf-Life Protocols
+              </h2>
+              <p className="text-xs text-slate-400">Real-time (25°C), Accelerated (40°C/75%RH), and Freeze-Thaw stability chamber logs.</p>
+            </div>
+            <button
+              onClick={() => setShowNewStabilityModal(true)}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-amber-500/20"
+            >
+              <Plus className="w-4 h-4" /> Log Stability Protocol
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {stabilityProtocols.map((stab) => (
+              <div key={stab.id} className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-4 hover:border-amber-500/30 transition-all">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-amber-400 font-bold text-xs bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20">
+                    {stab.stabilityCode}
+                  </span>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    {stab.status}
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-base font-bold text-white">{stab.productName}</h3>
+                  <p className="text-xs text-slate-400 font-mono">Formula: {stab.formulaCode} • {stab.chamberUnit}</p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-2">
+                  <div className="flex justify-between text-slate-300">
+                    <span>Condition:</span>
+                    <span className="font-semibold text-amber-300">{stab.testCondition}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Interval:</span>
+                    <span className="font-bold text-teal-400">{stab.currentInterval} / {stab.durationMonths} Mos</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>pH Drift Log:</span>
+                    <span className="font-mono text-emerald-400">{stab.phDrift}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Viscosity Status:</span>
+                    <span className="font-mono text-slate-200">{stab.viscosityChange}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Organoleptic:</span>
+                    <span className="font-bold text-emerald-400">{stab.organolepticCheck}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+                  <span>Microbiology: <strong className="text-emerald-400">{stab.microbiologyCheck}</strong></span>
+                  <span>Tested: {stab.lastTestedDate}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4.6 INCI & BPOM SAFETY CHECKER */}
+      {activeTab === 'inci-safety' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-emerald-400" /> INCI Safety & BPOM Regulatory Checker
+              </h2>
+              <p className="text-xs text-slate-400">Audit cosmetic ingredients against BPOM maximum limits, allergen tags, and Halal status.</p>
+            </div>
+          </div>
+
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
+            <div className="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+              <span className="text-xs text-slate-300 font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> BPOM & ECHA REACH Compliance Database
+              </span>
+              <span className="text-xs text-slate-400 font-mono">Total Verified Materials: {inciItems.length}</span>
+            </div>
+
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-950 text-slate-400 uppercase font-semibold border-b border-slate-800">
+                <tr>
+                  <th className="p-3.5">INCI Name / Trade Name</th>
+                  <th className="p-3.5">CAS Number</th>
+                  <th className="p-3.5">Category</th>
+                  <th className="p-3.5">BPOM Status</th>
+                  <th className="p-3.5">Max Threshold (%)</th>
+                  <th className="p-3.5">Halal Certified</th>
+                  <th className="p-3.5">Allergen & Safety Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-slate-300">
+                {inciItems.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-800/40">
+                    <td className="p-3.5">
+                      <div className="font-bold text-white">{item.inciName}</div>
+                      <div className="text-slate-400 italic text-[11px]">{item.tradeName}</div>
+                    </td>
+                    <td className="p-3.5 font-mono text-slate-400">{item.casNumber}</td>
+                    <td className="p-3.5 text-slate-300 font-medium">{item.functionCategory}</td>
+                    <td className="p-3.5">
+                      <span className={`px-2.5 py-1 rounded-full font-semibold ${
+                        item.bpomStatus === 'Permitted'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {item.bpomStatus}
+                      </span>
+                    </td>
+                    <td className="p-3.5 font-bold text-emerald-400">{item.maxAllowedPercent}%</td>
+                    <td className="p-3.5">
+                      {item.halalCertified ? (
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5" /> Halal Certified
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">Non-Halal</span>
+                      )}
+                    </td>
+                    <td className="p-3.5 text-slate-400">{item.allergenWarning}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 4.7 SENSORY & CLINICAL PANEL */}
+      {activeTab === 'sensory-clinical' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <HeartPulse className="w-5 h-5 text-teal-400" /> Sensory Evaluation & Clinical Patch Testing (HRIPT)
+              </h2>
+              <p className="text-xs text-slate-400">Human panel feedback, texture radar scores, and hypoallergenic patch test logs.</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {sensoryPanels.map((panel) => (
+              <div key={panel.id} className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div>
+                    <span className="text-xs font-mono text-teal-400 font-bold bg-teal-500/10 px-2.5 py-1 rounded border border-teal-500/20">
+                      {panel.panelCode}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-1">{panel.productName}</h3>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold text-emerald-400">{panel.overallSatisfactionPercent}%</span>
+                    <span className="block text-[11px] text-slate-400">Panel Approval Rate</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-300">Tested on <strong>{panel.panelSizeCount} Human Volunteers</strong> • Formula: {panel.formulaCode}</p>
+
+                {/* Radar Scores Grid */}
+                <div className="grid grid-cols-2 gap-3 text-xs bg-slate-950 p-4 rounded-xl border border-slate-800">
+                  <div>
+                    <span className="text-slate-400 block">Texture Elegance:</span>
+                    <span className="font-bold text-white">{panel.textureScore} / 5.0</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Skin Absorption Rate:</span>
+                    <span className="font-bold text-white">{panel.absorptionScore} / 5.0</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Non-Greasiness Score:</span>
+                    <span className="font-bold text-white">{panel.nonGreasinessScore} / 5.0</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Fragrance Acceptance:</span>
+                    <span className="font-bold text-white">{panel.fragranceScore} / 5.0</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-teal-950/40 border border-teal-500/30 text-xs text-teal-200 space-y-1">
+                  <span className="font-bold text-teal-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> HRIPT Clinical Dermatological Patch Test:
+                  </span>
+                  <p className="text-slate-300">{panel.hriptClinicalResult} • Dermatologist Approval Verified.</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -1123,6 +1506,12 @@ export function RdPlmExplorer() {
               </h2>
               <p className="text-xs text-slate-400">Engineering Change Requests & Orders for formula or packaging revisions.</p>
             </div>
+            <button
+              onClick={() => setShowNewEcrModal(true)}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-amber-500/20"
+            >
+              <Plus className="w-4 h-4" /> New Change Request (ECR)
+            </button>
           </div>
 
           <div className="space-y-4">
@@ -1361,6 +1750,296 @@ export function RdPlmExplorer() {
                   className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold cursor-pointer"
                 >
                   Submit Idea
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* STAGE GATE CHECKLIST MODAL */}
+      {selectedGateProject && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                  {selectedGateProject.projectCode}
+                </span>
+                <h3 className="text-base font-bold text-white">{selectedGateProject.projectName}</h3>
+              </div>
+              <button onClick={() => setSelectedGateProject(null)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex justify-between">
+                <span>Current Stage: <strong className="text-emerald-400">{selectedGateProject.stage}</strong></span>
+                <span>Gate Reviewer: <strong className="text-slate-200">{selectedGateProject.projectManager}</strong></span>
+              </div>
+
+              <span className="font-bold text-slate-300 block">Stage Gate Validation Requirements:</span>
+              <div className="space-y-2">
+                {[
+                  { label: 'Gate 1: Concept & Feasibility Approval', checked: true },
+                  { label: 'Gate 2: Laboratory Formula Stability & HRIPT Clinical Approval', checked: true },
+                  { label: 'Gate 3: Pilot Batch Scale-Up & MES Tech Transfer Approval', checked: selectedGateProject.stage !== 'Gate 1 (Concept Feasibility)' },
+                  { label: 'Gate 4: BPOM Registration & Artwork Proof Sign-Off', checked: selectedGateProject.stage.includes('Gate 4') || selectedGateProject.stage.includes('Gate 5') },
+                  { label: 'Gate 5: Commercial Launch & Mass Production Handover', checked: selectedGateProject.stage.includes('Gate 5') },
+                ].map((gate, i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                    <input type="checkbox" defaultChecked={gate.checked} className="w-4 h-4 rounded accent-emerald-500" />
+                    <span className={gate.checked ? 'text-slate-200 font-medium line-through opacity-80' : 'text-slate-200 font-semibold'}>
+                      {gate.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setSelectedGateProject(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+              >
+                Tutup
+              </button>
+              <button
+                onClick={() => {
+                  showToast(`Stage Gate ${selectedGateProject.projectCode} berhasil diloloskan & ditandatangani.`);
+                  setSelectedGateProject(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle2 className="w-4 h-4" /> Pass Stage Gate Review
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW LAB TRIAL MODAL */}
+      {showNewTrialModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <FlaskConical className="w-5 h-5 text-cyan-400" /> Log New Laboratory Formula Trial
+              </h3>
+              <button onClick={() => setShowNewTrialModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTrial} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-slate-300 font-medium">Formula Name / Product Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ultra Light Watery Sunscreen SPF 50"
+                  value={trialFormulaName}
+                  onChange={(e) => setTrialFormulaName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200 focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-300 font-medium">Variant</label>
+                  <input
+                    type="text"
+                    value={trialVariant}
+                    onChange={(e) => setTrialVariant(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-300 font-medium">Batch Size (Kg)</label>
+                  <input
+                    type="number"
+                    value={trialBatchSize}
+                    onChange={(e) => setTrialBatchSize(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-300 font-medium">Measured pH</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={trialTargetPh}
+                    onChange={(e) => setTrialTargetPh(Number(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-300 font-medium">Viscosity</label>
+                  <input
+                    type="text"
+                    value={trialTargetViscosity}
+                    onChange={(e) => setTrialTargetViscosity(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewTrialModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold cursor-pointer"
+                >
+                  Simpan Trial Lab
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* NEW STABILITY MODAL */}
+      {showNewStabilityModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Thermometer className="w-5 h-5 text-amber-400" /> Log Stability Chamber Protocol
+              </h3>
+              <button onClick={() => setShowNewStabilityModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateStability} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-slate-300 font-medium">Product Name</label>
+                <input
+                  type="text"
+                  required
+                  value={stabProductName}
+                  onChange={(e) => setStabProductName(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-300 font-medium">Formula Code</label>
+                <input
+                  type="text"
+                  required
+                  value={stabFormulaCode}
+                  onChange={(e) => setStabFormulaCode(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-300 font-medium">Test Condition</label>
+                <select
+                  value={stabCondition}
+                  onChange={(e) => setStabCondition(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                >
+                  <option value="Accelerated (40°C / 75% RH)">Accelerated (40°C / 75% RH)</option>
+                  <option value="Real-time Room Temp (25°C)">Real-time Room Temp (25°C)</option>
+                  <option value="Freeze-Thaw Cycle (-10°C to 45°C)">Freeze-Thaw Cycle (-10°C to 45°C)</option>
+                  <option value="Photostability UV Chamber">Photostability UV Chamber</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewStabilityModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold cursor-pointer"
+                >
+                  Daftarkan Protokol
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* NEW ECR MODAL */}
+      {showNewEcrModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-amber-400" /> New Engineering Change Request (ECR)
+              </h3>
+              <button onClick={() => setShowNewEcrModal(false)} className="text-slate-400 hover:text-white cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateEcr} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-slate-300 font-medium">Change Request Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Substitute Emulsifier A with Eco-Certified Emulsifier B"
+                  value={ecrTitle}
+                  onChange={(e) => setEcrTitle(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-300 font-medium">Impacted Product</label>
+                <input
+                  type="text"
+                  required
+                  value={ecrProduct}
+                  onChange={(e) => setEcrProduct(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-300 font-medium">Reason for Change & Risk Analysis</label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Explain supply chain constraints, cost savings, or formula performance improvement..."
+                  value={ecrReason}
+                  onChange={(e) => setEcrReason(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-slate-200"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewEcrModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold cursor-pointer"
+                >
+                  Kirim Pengajuan ECR
                 </button>
               </div>
             </form>

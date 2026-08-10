@@ -14,10 +14,15 @@ import {
   CheckCircle2,
   Save,
   Laptop,
+  Users,
+  Check,
+  X,
+  Sparkles,
 } from 'lucide-react';
+import { PRESET_USER_PERSONAS } from '../types';
 
 export const UserProfileSettingsModule: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'help'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'rbac' | 'help'>('profile');
   const [isSaved, setIsSaved] = useState(false);
 
   // Profile States
@@ -59,10 +64,15 @@ export const UserProfileSettingsModule: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-800 text-xs font-extrabold">
+      <div
+        onWheel={(e) => {
+          if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY;
+        }}
+        className="flex border-b border-slate-800 text-xs font-extrabold overflow-x-auto custom-scrollbar scroll-smooth touch-pan-x py-1"
+      >
         <button
           onClick={() => setActiveTab('profile')}
-          className={`pb-3 px-5 transition-all ${
+          className={`pb-3 px-5 whitespace-nowrap transition-all ${
             activeTab === 'profile'
               ? 'border-b-2 border-emerald-400 text-emerald-400'
               : 'text-slate-400 hover:text-slate-200'
@@ -72,7 +82,7 @@ export const UserProfileSettingsModule: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('security')}
-          className={`pb-3 px-5 transition-all ${
+          className={`pb-3 px-5 whitespace-nowrap transition-all ${
             activeTab === 'security'
               ? 'border-b-2 border-emerald-400 text-emerald-400'
               : 'text-slate-400 hover:text-slate-200'
@@ -81,8 +91,19 @@ export const UserProfileSettingsModule: React.FC = () => {
           Keamanan & Perangkat Sesi
         </button>
         <button
+          onClick={() => setActiveTab('rbac')}
+          className={`pb-3 px-5 whitespace-nowrap transition-all flex items-center gap-1.5 ${
+            activeTab === 'rbac'
+              ? 'border-b-2 border-amber-400 text-amber-400'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShieldCheck className="h-3.5 w-3.5 text-amber-400" />
+          <span>Matriks Hak Akses & Menu (RBAC)</span>
+        </button>
+        <button
           onClick={() => setActiveTab('help')}
-          className={`pb-3 px-5 transition-all ${
+          className={`pb-3 px-5 whitespace-nowrap transition-all ${
             activeTab === 'help'
               ? 'border-b-2 border-emerald-400 text-emerald-400'
               : 'text-slate-400 hover:text-slate-200'
@@ -198,7 +219,89 @@ export const UserProfileSettingsModule: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 3: Help Center */}
+      {/* Tab 3: RBAC Access Matrix */}
+      {activeTab === 'rbac' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-6 space-y-4 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div>
+                <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-amber-400" />
+                  Matriks Kewenangan & Akses Menu Per Role (RBAC)
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Daftar menu ERP & Manufacturing Operations yang dapat diakses oleh masing-masing akun pengguna berdasarkan jabatan.
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-amber-950 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold self-start">
+                Strict Multi-Role Isolation
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+              {PRESET_USER_PERSONAS.map((persona) => {
+                const allowedCount = persona.allowedTabs ? persona.allowedTabs.length : 24;
+                return (
+                  <div
+                    key={persona.id}
+                    className="rounded-2xl border border-slate-800 bg-slate-950 p-4 space-y-3 flex flex-col justify-between hover:border-slate-700 transition-all"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-800 text-amber-300 border border-amber-500/30">
+                          {persona.badge}
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                          {allowedCount} Menu Diizinkan
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 text-white font-extrabold text-xs">
+                          {persona.initials}
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-slate-100 text-xs">
+                            {persona.name}
+                          </h4>
+                          <p className="text-[10px] text-slate-400">
+                            {persona.email}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] font-semibold text-emerald-400 bg-slate-900 p-2 rounded-xl border border-slate-800">
+                        {persona.role}
+                      </p>
+
+                      <div className="space-y-1 text-[10px] text-slate-300 pt-1">
+                        <p className="font-bold text-slate-400 uppercase text-[9px]">Daftar Menu Utama:</p>
+                        <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar pr-1">
+                          {persona.allowedTabs?.map((tabId) => (
+                            <span
+                              key={tabId}
+                              className="px-2 py-0.5 rounded bg-slate-900 text-slate-200 border border-slate-800 text-[9px] font-mono capitalize"
+                            >
+                              ✓ {tabId}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400">
+                      <span>Departemen:</span>
+                      <span className="font-semibold text-slate-300 truncate max-w-[150px]">
+                        {persona.department}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {activeTab === 'help' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-6 space-y-4 shadow-xl">

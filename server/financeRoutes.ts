@@ -20,6 +20,7 @@ import {
   PettyCashTransaction,
   CostCenterBudget,
   ProductCostingItem,
+  CostVarianceDetail,
   FixedAssetItem,
   TaxTransaction,
 } from './financeData.js';
@@ -250,6 +251,101 @@ financeRouter.get('/finance/product-costing', (req: Request, res: Response) => {
     success: true,
     productCosting: productCostingList,
     costVariances: costVariances,
+  });
+});
+
+financeRouter.post('/finance/product-costing', (req: Request, res: Response) => {
+  const {
+    productCode,
+    productName,
+    batchSizeKg,
+    rawMaterialCostIdr,
+    packagingCostIdr,
+    directLaborCostIdr,
+    machineCostIdr,
+    utilityCostIdr,
+    overheadCostIdr,
+    wasteYieldLossIdr,
+    targetSellingPriceIdr,
+  } = req.body;
+
+  if (!productName || !productCode) {
+    return res.status(400).json({ error: 'Kode Produk dan Nama Produk wajib diisi.' });
+  }
+
+  const raw = Number(rawMaterialCostIdr || 0);
+  const pack = Number(packagingCostIdr || 0);
+  const labor = Number(directLaborCostIdr || 0);
+  const machine = Number(machineCostIdr || 0);
+  const utility = Number(utilityCostIdr || 0);
+  const overhead = Number(overheadCostIdr || 0);
+  const waste = Number(wasteYieldLossIdr || 0);
+
+  const calculatedActualCogm = raw + pack + labor + machine + utility + overhead + waste;
+  const standardCogm = Math.round(calculatedActualCogm * 1.02); // 2% standard baseline buffer
+  const variancePerKg = calculatedActualCogm - standardCogm;
+
+  const sellPrice = Number(targetSellingPriceIdr || calculatedActualCogm * 2.2);
+  const marginPct = sellPrice > 0 ? Number((((sellPrice - calculatedActualCogm) / sellPrice) * 100).toFixed(1)) : 50;
+
+  const newCosting: ProductCostingItem = {
+    id: `PCST-${Date.now()}`,
+    productCode,
+    productName,
+    batchSizeKg: Number(batchSizeKg || 1000),
+    standardCogmPerKgIdr: standardCogm,
+    actualCogmPerKgIdr: calculatedActualCogm,
+    variancePerKgIdr: variancePerKg,
+    rawMaterialCostIdr: raw,
+    packagingCostIdr: pack,
+    directLaborCostIdr: labor,
+    machineCostIdr: machine,
+    utilityCostIdr: utility,
+    overheadCostIdr: overhead,
+    wasteYieldLossIdr: waste,
+    marginPercentage: marginPct,
+  };
+
+  productCostingList.unshift(newCosting);
+  res.status(201).json({
+    success: true,
+    message: `Kalkulasi COGM HPP untuk ${productName} berhasil disimpan.`,
+    data: newCosting,
+  });
+});
+
+financeRouter.post('/finance/cost-variances', (req: Request, res: Response) => {
+  const { batchCode, productName, materialPriceVarianceIdr, materialUsageVarianceIdr, laborVarianceIdr, machineEfficiencyVarianceIdr, yieldVarianceIdr, explanation } = req.body;
+
+  if (!batchCode || !productName) {
+    return res.status(400).json({ error: 'Kode Batch dan Nama Produk wajib diisi.' });
+  }
+
+  const mpv = Number(materialPriceVarianceIdr || 0);
+  const muv = Number(materialUsageVarianceIdr || 0);
+  const lv = Number(laborVarianceIdr || 0);
+  const mv = Number(machineEfficiencyVarianceIdr || 0);
+  const yv = Number(yieldVarianceIdr || 0);
+  const totalVar = mpv + muv + lv + mv + yv;
+
+  const newVariance: CostVarianceDetail = {
+    id: `VAR-${Date.now()}`,
+    batchCode,
+    productName,
+    materialPriceVarianceIdr: mpv,
+    materialUsageVarianceIdr: muv,
+    laborVarianceIdr: lv,
+    machineEfficiencyVarianceIdr: mv,
+    yieldVarianceIdr: yv,
+    totalVarianceIdr: totalVar,
+    explanation: explanation || 'Analisis varian biaya produksi batch otomatis dari MES.',
+  };
+
+  costVariances.unshift(newVariance);
+  res.status(201).json({
+    success: true,
+    message: `Laporan Varian HPP Batch ${batchCode} berhasil dicatat.`,
+    data: newVariance,
   });
 });
 

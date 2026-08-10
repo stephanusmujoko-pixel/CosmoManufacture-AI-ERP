@@ -5,11 +5,15 @@ import {
   dbSalesOrders,
   dbDeliveryOrders,
   dbActivities,
+  dbSampleRequests,
+  dbBpomAssistance,
   Lead,
   SalesQuotation,
   SalesOrder,
   DeliveryOrder,
   CustomerActivity,
+  SampleRequest,
+  BpomHalalAssistance,
 } from './crmData.js';
 import { dbCustomers, dbProducts } from './masterData.js';
 
@@ -231,6 +235,133 @@ crmRouter.get('/crm/delivery-orders', (req: Request, res: Response) => {
     totalDeliveryOrders: dbDeliveryOrders.length,
     data: dbDeliveryOrders,
   });
+});
+
+crmRouter.post('/crm/delivery-orders', (req: Request, res: Response) => {
+  const body = req.body;
+  const newDo: DeliveryOrder = {
+    id: `do-${Date.now()}`,
+    doNumber: `DO/LOG/2026/08/${Math.floor(100 + Math.random() * 900)}`,
+    soNumber: body.soNumber || 'SO/CPKB/2026/08/0088',
+    customerName: body.customerName || 'PT Beauty Glow Indonesia',
+    shippingAddress: body.shippingAddress || 'Gudang Utama Klien, Pergudangan Taman Tekno Blok D/5',
+    courierName: body.courierName || 'Internal Cold Chain Logistics',
+    trackingNumber: `TRK-MAKLON-${Date.now().toString().slice(-6)}`,
+    driverName: body.driverName || 'Agus Setiawan (SIM B2)',
+    vehiclePlateNumber: body.vehiclePlateNumber || 'B 9201 PQA',
+    dispatchDate: new Date().toISOString().replace('T', ' ').slice(0, 16),
+    estimatedArrival: '2026-08-10 14:00',
+    status: 'In Transit',
+  };
+
+  dbDeliveryOrders.unshift(newDo);
+  return res.status(201).json({
+    success: true,
+    message: `Delivery Order ${newDo.doNumber} berhasil diterbitkan.`,
+    data: newDo,
+  });
+});
+
+// 5. SAMPLE REQUESTS (R&D LAB TRIALS)
+crmRouter.get('/crm/sample-requests', (req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    totalSampleRequests: dbSampleRequests.length,
+    data: dbSampleRequests,
+  });
+});
+
+crmRouter.post('/crm/sample-requests', (req: Request, res: Response) => {
+  const body = req.body;
+  const newSamp: SampleRequest = {
+    id: `samp-${Date.now()}`,
+    sampleNumber: `SAMP/RD/2026/08/${Math.floor(100 + Math.random() * 900)}`,
+    leadId: body.leadId,
+    customerName: body.customerName || 'Klien Baru Maklon',
+    brandName: body.brandName || 'Brand Beauty',
+    formulaName: body.formulaName || 'Hydrating Face Serum Niacinamide',
+    labBatchNumber: `BATCH-LAB-${Math.floor(8000 + Math.random() * 1000)}`,
+    scentNote: body.scentNote || 'Natural Essential Oil',
+    textureSpec: body.textureSpec || 'Lightweight Watery Gel',
+    feedbackStatus: 'Pending Review',
+    dispatchDate: new Date().toISOString().split('T')[0],
+    salespersonName: body.salespersonName || 'Dimas Anggara',
+  };
+
+  dbSampleRequests.unshift(newSamp);
+  return res.status(201).json({
+    success: true,
+    message: `Permintaan Sampel Lab R&D ${newSamp.sampleNumber} berhasil dikirim ke formulator.`,
+    data: newSamp,
+  });
+});
+
+crmRouter.patch('/crm/sample-requests/:id/feedback', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { feedbackStatus, revisionNotes } = req.body;
+
+  const samp = dbSampleRequests.find((s) => s.id === id);
+  if (!samp) {
+    return res.status(404).json({ success: false, message: 'Sampel request tidak ditemukan.' });
+  }
+
+  samp.feedbackStatus = feedbackStatus;
+  if (revisionNotes) samp.revisionNotes = revisionNotes;
+
+  return res.json({
+    success: true,
+    message: `Status ulasan sampel ${samp.sampleNumber} diperbarui menjadi: ${feedbackStatus}`,
+    data: samp,
+  });
+});
+
+// 6. BPOM & HALAL ASSISTANCE TRACKER
+crmRouter.get('/crm/bpom-assistance', (req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    totalAssistance: dbBpomAssistance.length,
+    data: dbBpomAssistance,
+  });
+});
+
+crmRouter.post('/crm/bpom-assistance', (req: Request, res: Response) => {
+  const body = req.body;
+  const newBpom: BpomHalalAssistance = {
+    id: `bpom-${Date.now()}`,
+    customerName: body.customerName || 'PT Beauty Glow Indonesia',
+    brandName: body.brandName || 'BeautyGlow Cosmetics',
+    productName: body.productName || 'Serum Glowing Brightening',
+    targetBpomCategory: body.targetBpomCategory || 'NA - Kosmetik Perawatan Kulit',
+    bpomSubmissionStatus: body.bpomSubmissionStatus || 'Uji Lab Stabilitas & Mikrobiologi',
+    estimatedTargetDate: body.estimatedTargetDate || '2026-09-30',
+  };
+
+  dbBpomAssistance.unshift(newBpom);
+  return res.status(201).json({
+    success: true,
+    message: 'Registrasi Pendampingan BPOM NA & Halal berhasil didaftarkan.',
+    data: newBpom,
+  });
+});
+
+// 7. AI SALES ASSISTANT CHAT
+crmRouter.post('/crm/ai-chat', (req: Request, res: Response) => {
+  const { message } = req.body;
+  const q = (message || '').toLowerCase();
+
+  let reply = 'AI Sales & Revenue Copilot aktif. Saya siap membantu analisis deal size, rekomendasi harga MOQ, estimasi durasi BPOM NA, dan strategi closing B2B maklon.';
+
+  if (q.includes('lead') || q.includes('score') || q.includes('prospek') || q.includes('glownation')) {
+    reply = '🎯 **Analisis AI Lead Scoring & Priority:**\n- **GlowNation Skincare Inc.** (Score 88/100): Probabilitas closing 80%. Potensi omset Rp 450.000.000. Rekomendasi: Kirimkan Sales Quotation harga promo MOQ 10.000 pcs dengan gratis biaya pendaftaran BPOM NA.';
+  } else if (q.includes('bpom') || q.includes('halal') || q.includes('izin') || q.includes('regis')) {
+    reply = '📑 **SLA Pendaftaran BPOM NA & Halal Maklon:**\n1. Uji Stabilitas 3 Bulan & Mikrobiologi: ~30 Hari.\n2. Injeksi Dokumen e-Registration BPOM: 7-14 Hari Kerja.\n3. Rata-rata terbit sertifikat Halal LPPOM MUI: 14 Hari. Disarankan menginfokan klien estimasi total SLA 45-60 Hari.';
+  } else if (q.includes('harga') || q.includes('margin') || q.includes('diskon') || q.includes('moq')) {
+    reply = '💰 **Simulasi Marjin & Tiering Harga Maklon:**\n- **1.000 - 4.999 Pcs**: Rp 35.000 / pcs (Gross Margin 42%).\n- **5.000 - 9.999 Pcs**: Rp 32.000 / pcs (Gross Margin 38%).\n- **>= 10.000 Pcs**: Rp 30.400 / pcs (Gross Margin 35% - Best Selling Volume Tier).';
+  } else if (q.includes('forecast') || q.includes('target') || q.includes('omset') || q.includes('revenue')) {
+    reply = '📈 **Proyeksi Revenue AI Bulan Depan:**\n- **Estimasi Omset**: Rp 1,28 Miliar (+22% dari bulan ini).\n- **Key Revenue Drivers**: Closing deal GlowNation (450M) & repeat order SO BeautyGlow Serum (574M).';
+  }
+
+  return res.json({ success: true, reply });
 });
 
 // 5. CUSTOMER ACTIVITIES

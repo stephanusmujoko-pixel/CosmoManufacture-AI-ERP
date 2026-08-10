@@ -181,3 +181,104 @@ export interface SystemArchitectureBlueprint {
   diagramData?: Record<string, any>;
   highlights: string[];
 }
+
+export interface UserProfilePersona {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  initials: string;
+  badge: string;
+  badgeColor: string;
+  department: string;
+  allowedTabs?: string[];
+}
+
+export const PRESET_USER_PERSONAS: UserProfilePersona[] = [
+  {
+    id: 'u-dev-00',
+    name: 'Stephanus Mujoko, S.Kom',
+    role: 'Lead Developer & Super Admin',
+    email: 'stephanusmujoko@gmail.com',
+    initials: 'SM',
+    badge: 'Super Admin',
+    badgeColor: 'amber',
+    department: 'Software Engineering & AI System Architecture',
+    allowedTabs: [
+      'blueprint', 'dashboard', 'design-system', 'rd', 'formula', 'production',
+      'inventory', 'quality', 'eam', 'crm', 'purchasing', 'wms', 'ppic',
+      'finance', 'hr', 'maintenance', 'regulatory', 'master-data', 'license-sub',
+      'backend-auth', 'saas-engine', 'user-settings', 'ai-center', 'super-admin'
+    ],
+  },
+  {
+    id: 'u-admin-01',
+    name: 'Hendra Wijaya, S.T.',
+    role: 'Tenant Owner & Chief Executive Officer',
+    email: 'hendra@beautyglow.co.id',
+    initials: 'HW',
+    badge: 'Owner & CEO',
+    badgeColor: 'emerald',
+    department: 'Executive Board',
+    allowedTabs: [
+      'dashboard', 'rd', 'formula', 'production', 'inventory', 'quality', 'eam',
+      'crm', 'purchasing', 'wms', 'ppic', 'finance', 'hr', 'maintenance',
+      'regulatory', 'master-data', 'license-sub', 'user-settings', 'ai-center'
+    ],
+  },
+  {
+    id: 'u-qa-01',
+    name: 'Apt. Clara, M.Farm',
+    role: 'Head Chemist & QA Director',
+    email: 'clara@beautyglow.co.id',
+    initials: 'PA',
+    badge: 'Head Chemist',
+    badgeColor: 'teal',
+    department: 'R&D Formulation & Quality Assurance',
+    allowedTabs: [
+      'rd', 'formula', 'quality', 'regulatory', 'master-data', 'ai-center', 'user-settings'
+    ],
+  },
+  {
+    id: 'u-plant-01',
+    name: 'Budi Santoso, S.T.',
+    role: 'Factory & MES Operations Manager',
+    email: 'budi@beautyglow.co.id',
+    initials: 'BS',
+    badge: 'Factory Manager',
+    badgeColor: 'indigo',
+    department: 'Cleanroom Production & Batch Processing',
+    allowedTabs: [
+      'production', 'inventory', 'quality', 'eam', 'wms', 'ppic', 'maintenance',
+      'master-data', 'ai-center', 'user-settings'
+    ],
+  },
+  {
+    id: 'u-fin-01',
+    name: 'Rina Melati, S.E.',
+    role: 'Head of Finance & COGM Costing',
+    email: 'rina@beautyglow.co.id',
+    initials: 'RM',
+    badge: 'Finance Head',
+    badgeColor: 'purple',
+    department: 'Finance & ERP Accounting',
+    allowedTabs: [
+      'dashboard', 'finance', 'purchasing', 'crm', 'inventory', 'master-data',
+      'license-sub', 'ai-center', 'user-settings'
+    ],
+  },
+  {
+    id: 'u-apj-02',
+    name: 'Apt. Maya Indah, S.Farm',
+    role: 'Regulatory & e-BPOM Manager',
+    email: 'maya@beautyglow.co.id',
+    initials: 'MI',
+    badge: 'Regulatory APJ',
+    badgeColor: 'blue',
+    department: 'Legal Compliance & CPKB Standards',
+    allowedTabs: [
+      'regulatory', 'rd', 'formula', 'quality', 'master-data', 'ai-center', 'user-settings'
+    ],
+  },
+];
+

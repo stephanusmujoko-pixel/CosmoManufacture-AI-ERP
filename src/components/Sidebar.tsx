@@ -15,7 +15,10 @@ import {
   Building2,
   Layers,
   Lightbulb,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
+import { UserProfilePersona } from '../types';
 
 export type ViewTab =
   | 'landing'
@@ -48,6 +51,7 @@ interface SidebarProps {
   currentTab: ViewTab;
   onSelectTab: (tab: ViewTab) => void;
   collapsed?: boolean;
+  currentUser?: UserProfilePersona;
 }
 
 interface NavItem {
@@ -250,7 +254,7 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, currentUser }) => {
   const categories = [
     'Core Strategy & Design',
     'Development',
@@ -259,69 +263,116 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
     'Compliance & Intelligence',
   ] as const;
 
+  const allowedSet = currentUser?.allowedTabs ? new Set(currentUser.allowedTabs) : null;
+  const totalItemsCount = NAV_ITEMS.length;
+  const accessibleItemsCount = allowedSet ? NAV_ITEMS.filter(item => allowedSet.has(item.id)).length : totalItemsCount;
+
   return (
     <aside className="w-64 flex-shrink-0 border-r border-emerald-950/20 bg-slate-900/95 p-3 dark:border-emerald-500/20 dark:bg-slate-950/95 flex flex-col justify-between h-[calc(100vh-4rem)] overflow-y-auto custom-scrollbar">
-      <div className="space-y-5">
-        {categories.map((cat) => (
-          <div key={cat} className="space-y-1">
-            <h3 className="px-3 text-[10px] font-extrabold uppercase tracking-widest text-emerald-500/80">
-              {cat}
-            </h3>
-            <div className="space-y-0.5 mt-1">
-              {NAV_ITEMS.filter((item) => item.category === cat).map((item) => {
-                const Icon = item.icon;
-                const isActive = currentTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => onSelectTab(item.id)}
-                    className={`group relative flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all ${
-                      isActive
-                        ? 'bg-gradient-to-r from-emerald-600/90 to-teal-700/90 text-white shadow-md shadow-emerald-950/50 ring-1 ring-amber-400/40'
-                        : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2.5 min-w-0">
-                      <div
-                        className={`p-1.5 rounded-lg ${
-                          isActive
-                            ? 'bg-emerald-950/60 text-amber-300'
-                            : 'bg-slate-800/80 text-emerald-400 group-hover:bg-slate-700'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="truncate">
-                        <p className="truncate font-semibold tracking-tight">
-                          {item.label}
-                        </p>
-                        <p
-                          className={`text-[10px] truncate ${
-                            isActive ? 'text-emerald-200' : 'text-slate-400'
+      <div className="space-y-4">
+        {/* Active Role Permissions Indicator */}
+        {currentUser && (
+          <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 space-y-1 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Hak Akses Menu Peran
+              </span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/30">
+                {accessibleItemsCount}/{totalItemsCount} Menu
+              </span>
+            </div>
+            <p className="font-bold text-slate-200 text-[11px] truncate">
+              {currentUser.role}
+            </p>
+            <p className="text-[9px] text-slate-400">
+              Dibatasi sesuai kewenangan jabatan ({currentUser.department})
+            </p>
+          </div>
+        )}
+
+        {categories.map((cat) => {
+          const categoryItems = NAV_ITEMS.filter((item) => {
+            if (item.category !== cat) return false;
+            if (!allowedSet) return true;
+            return allowedSet.has(item.id);
+          });
+
+          if (categoryItems.length === 0) {
+            return (
+              <div key={cat} className="space-y-1 opacity-50">
+                <h3 className="px-3 text-[10px] font-extrabold uppercase tracking-widest text-slate-600 flex items-center justify-between">
+                  <span>{cat}</span>
+                  <Lock className="h-3 w-3 text-slate-600" />
+                </h3>
+                <div className="px-3 py-1 text-[10px] text-slate-500 italic">
+                  Menu terkunci untuk peran ini
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={cat} className="space-y-1">
+              <h3 className="px-3 text-[10px] font-extrabold uppercase tracking-widest text-emerald-500/80">
+                {cat}
+              </h3>
+              <div className="space-y-0.5 mt-1">
+                {categoryItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onSelectTab(item.id)}
+                      className={`group relative flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-all ${
+                        isActive
+                          ? 'bg-gradient-to-r from-emerald-600/90 to-teal-700/90 text-white shadow-md shadow-emerald-950/50 ring-1 ring-amber-400/40'
+                          : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <div
+                          className={`p-1.5 rounded-lg ${
+                            isActive
+                              ? 'bg-emerald-950/60 text-amber-300'
+                              : 'bg-slate-800/80 text-emerald-400 group-hover:bg-slate-700'
                           }`}
                         >
-                          {item.description}
-                        </p>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="truncate">
+                          <p className="truncate font-semibold tracking-tight">
+                            {item.label}
+                          </p>
+                          <p
+                            className={`text-[10px] truncate ${
+                              isActive ? 'text-emerald-200' : 'text-slate-400'
+                            }`}
+                          >
+                            {item.description}
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    {item.badge && (
-                      <span
-                        className={`ml-1 flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                          isActive
-                            ? 'bg-amber-400 text-slate-950'
-                            : 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
-                        }`}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                      {item.badge && (
+                        <span
+                          className={`ml-1 flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                            isActive
+                              ? 'bg-amber-400 text-slate-950'
+                              : 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Footer System Info */}

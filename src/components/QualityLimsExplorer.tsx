@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Microscope,
   ShieldCheck,
@@ -48,136 +48,26 @@ import {
   ClipboardList,
   Building2,
   Fingerprint,
+  X,
+  Play,
+  Send,
 } from 'lucide-react';
-
-// ==========================================
-// TYPES FOR QC, QA & LIMS ENTERPRISE (PROMPT 14)
-// ==========================================
-
-export interface InspectionRecord {
-  id: string;
-  inspectionNo: string;
-  type: 'IQC Raw Material' | 'IQC Packaging' | 'IPQC Compounding' | 'FGQC Finished Goods' | 'Packaging Line QC';
-  itemCode: string;
-  itemName: string;
-  batchNumber: string;
-  supplierOrLine: string;
-  quantity: string;
-  inspectionDate: string;
-  inspectorName: string;
-  status: 'Passed / Released' | 'QC Hold' | 'Rejected' | 'Under Testing';
-  aqlLevel?: string;
-  sampleCount: number;
-  parametersTested: {
-    name: string;
-    specification: string;
-    result: string;
-    pass: boolean;
-  }[];
-  qcActionNotes: string;
-}
-
-export interface LaboratorySample {
-  id: string;
-  sampleCode: string;
-  requestNumber: string;
-  sourceType: 'Raw Material' | 'In-Process Bulk' | 'Finished Product' | 'Environmental Swab' | 'Purified Water WFI';
-  batchNumber: string;
-  itemName: string;
-  samplingDate: string;
-  sampledBy: string;
-  analystAssigned: string;
-  testCategory: 'Chemical & Physical' | 'Microbiology' | 'Heavy Metal' | 'Assay Active';
-  status: 'In Testing' | 'Completed' | 'Pending Review' | 'Quarantine';
-  priority: 'Urgent' | 'Routine' | 'High';
-}
-
-export interface InstrumentCalibration {
-  id: string;
-  equipmentCode: string;
-  equipmentName: string;
-  brandModel: string;
-  location: string;
-  lastCalibrationDate: string;
-  nextCalibrationDue: string;
-  calibrationStatus: 'Calibrated / Valid' | 'Due Soon' | 'Out of Calibration';
-  certNumber: string;
-  calibratedBy: string;
-}
-
-export interface MicrobiologyTest {
-  id: string;
-  testNo: string;
-  sampleName: string;
-  batchNumber: string;
-  testType: 'ALT (Angka Lempeng Total)' | 'AKBK (Kapang Khamir)' | 'Pathogen Screening' | 'Water WFI Bioburden' | 'Air Swab Cleanroom';
-  specLimit: string;
-  actualResult: string;
-  incubationTemp: string;
-  incubationHours: string;
-  status: 'Passed (Negative)' | 'In Incubation' | 'Alert Limit Exceeded';
-  testedBy: string;
-}
-
-export interface StabilityStudyProtocol {
-  id: string;
-  protocolCode: string;
-  productName: string;
-  batchNumber: string;
-  studyType: 'Accelerated (40°C/75% RH)' | 'Real-Time (30°C/65% RH)' | 'Photostability';
-  chamberCode: string;
-  startDate: string;
-  shelfLifeTargetMonths: number;
-  pullSchedule: {
-    timePoint: string;
-    pullDate: string;
-    status: 'Completed' | 'Scheduled' | 'Testing';
-    pHResult?: number;
-    viscosityCps?: number;
-    organolepticPass?: boolean;
-  }[];
-  currentStatus: 'On-Going Passed' | 'Completed' | 'Out of Spec Alert';
-}
-
-export interface CoaDocument {
-  id: string;
-  coaNumber: string;
-  batchNumber: string;
-  productName: string;
-  productCode: string;
-  manufacturingDate: string;
-  expiryDate: string;
-  quantityProduced: string;
-  clientName: string;
-  approvedByQA: string;
-  digitalSignatureHash: string;
-  issueDate: string;
-  status: 'Issued & Approved' | 'Pending QA Signature' | 'Revoked';
-  testResults: {
-    parameter: string;
-    method: string;
-    specification: string;
-    result: string;
-  }[];
-}
-
-export interface QualityDeviationCapa {
-  id: string;
-  caseNo: string;
-  type: 'Deviation' | 'NCR (Non-Conformance)' | 'CAPA Action';
-  severity: 'Critical' | 'Major' | 'Minor';
-  title: string;
-  batchNumber: string;
-  department: 'Production Compounding' | 'Packaging Line' | 'Warehouse Raw' | 'Quality Lab';
-  reportedDate: string;
-  rootCause5Why: string[];
-  fishboneCategory: 'Machine' | 'Method' | 'Material' | 'Manpower' | 'Environment';
-  correctiveAction: string;
-  preventiveAction: string;
-  targetClosureDate: string;
-  status: 'Under Investigation' | 'CAPA Implemented' | 'Closed & Verified';
-  verifiedByQA: string;
-}
+import {
+  initialInspections,
+  initialLabSamples,
+  initialInstruments,
+  initialMicroTests,
+  initialStabilityProtocols,
+  initialCoaDocuments,
+  initialDeviations,
+  InspectionRecord,
+  LaboratorySample,
+  InstrumentCalibration,
+  MicrobiologyTest,
+  StabilityStudyProtocol,
+  CoaDocument,
+  QualityDeviationCapa,
+} from '../../server/qualityData';
 
 export const QualityLimsExplorer: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -194,294 +84,558 @@ export const QualityLimsExplorer: React.FC = () => {
   >('dashboard');
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [inspectionFilter, setInspectionFilter] = useState<string>('All');
+
+  // Modals visibility
   const [showCoaModal, setShowCoaModal] = useState(false);
+  const [showNewInspectionModal, setShowNewInspectionModal] = useState(false);
   const [showNewSampleModal, setShowNewSampleModal] = useState(false);
+  const [showNewInstrumentModal, setShowNewInstrumentModal] = useState(false);
+  const [showNewMicroModal, setShowNewMicroModal] = useState(false);
+  const [showNewStabilityModal, setShowNewStabilityModal] = useState(false);
+  const [showNewCoaModal, setShowNewCoaModal] = useState(false);
   const [showNewDeviationModal, setShowNewDeviationModal] = useState(false);
+
+  // Selected Items
   const [selectedCoa, setSelectedCoa] = useState<CoaDocument | null>(null);
 
-  // MOCK INSPECTIONS DATA
-  const [inspections] = useState<InspectionRecord[]>([
-    {
-      id: 'INSP-001',
-      inspectionNo: 'IQC-2026-0801',
-      type: 'IQC Raw Material',
-      itemCode: 'RM-NIA-001',
-      itemName: 'Niacinamide USP / EP (Vitamin B3 99.8%)',
-      batchNumber: 'LOT-DSM-20260715',
-      supplierOrLine: 'DSM Nutritional Products Ltd',
-      quantity: '500 Kg (20 Drums)',
-      inspectionDate: '2026-08-01',
-      inspectorName: 'Dewi Sartika, S.Farm.',
+  // State Collections
+  const [inspections, setInspections] = useState<InspectionRecord[]>(initialInspections);
+  const [labSamples, setLabSamples] = useState<LaboratorySample[]>(initialLabSamples);
+  const [instruments, setInstruments] = useState<InstrumentCalibration[]>(initialInstruments);
+  const [microTests, setMicroTests] = useState<MicrobiologyTest[]>(initialMicroTests);
+  const [stabilityProtocols, setStabilityProtocols] = useState<StabilityStudyProtocol[]>(initialStabilityProtocols);
+  const [coaList, setCoaList] = useState<CoaDocument[]>(initialCoaDocuments);
+  const [deviations, setDeviations] = useState<QualityDeviationCapa[]>(initialDeviations);
+
+  // Form States
+  const [newInspection, setNewInspection] = useState({
+    type: 'IQC Raw Material' as InspectionRecord['type'],
+    itemCode: '',
+    itemName: '',
+    batchNumber: '',
+    supplierOrLine: '',
+    quantity: '',
+    inspectorName: 'Dewi Sartika, S.Farm.',
+    param1Name: 'Assay / Kadar Kemurnian',
+    param1Spec: '99.0% - 101.0%',
+    param1Result: '99.85%',
+    param2Name: 'Uji Organoleptik',
+    param2Spec: 'Jernih Kental Khas',
+    param2Result: 'Sesuai Standar',
+    qcActionNotes: 'Lulus pengujian spesifikasi standar CPKB.',
+  });
+
+  const [newSample, setNewSample] = useState({
+    itemName: '',
+    batchNumber: '',
+    sourceType: 'Finished Product' as LaboratorySample['sourceType'],
+    testCategory: 'Chemical & Physical' as LaboratorySample['testCategory'],
+    priority: 'Routine' as LaboratorySample['priority'],
+    sampledBy: 'Budi Santoso',
+    analystAssigned: 'Siti Aminah, Amd.AK',
+  });
+
+  const [newInstrument, setNewInstrument] = useState({
+    equipmentCode: '',
+    equipmentName: '',
+    brandModel: '',
+    location: 'Laboratorium Kimia Fisika',
+    certNumber: '',
+    calibratedBy: 'PT Kalibrasi Presisi Indonesia',
+    nextCalibrationDue: '',
+  });
+
+  const [newMicro, setNewMicro] = useState({
+    sampleName: '',
+    batchNumber: '',
+    testType: 'ALT (Angka Lempeng Total)' as MicrobiologyTest['testType'],
+    specLimit: '< 100 CFU/g (BPOM)',
+    actualResult: '< 10 CFU/g (Pass)',
+    testedBy: 'Amd. AK Ani Suryani',
+  });
+
+  const [newStability, setNewStability] = useState({
+    productName: '',
+    batchNumber: '',
+    studyType: 'Accelerated (40°C/75% RH)' as StabilityStudyProtocol['studyType'],
+    chamberCode: 'CHAMBER-ACCEL-01',
+    shelfLifeTargetMonths: 24,
+  });
+
+  const [newCoa, setNewCoa] = useState({
+    batchNumber: '',
+    productName: '',
+    clientName: 'PT Glow Aesthetic Indonesia (Maklon)',
+    approvedByQA: 'Eko Prasetyo, S.Farm., Apt. (Head of QA)',
+  });
+
+  const [newDeviation, setNewDeviation] = useState({
+    title: '',
+    severity: 'Minor' as QualityDeviationCapa['severity'],
+    batchNumber: '',
+    department: 'Production Compounding' as QualityDeviationCapa['department'],
+    rootCause1: '',
+    rootCause2: '',
+    rootCause3: '',
+    correctiveAction: '',
+    preventiveAction: '',
+  });
+
+  // AI OOS Tool State
+  const [aiOosInput, setAiOosInput] = useState({
+    parameter: 'Derajat pH (25°C)',
+    specLimit: '5.20 - 5.80',
+    actualValue: '6.15',
+    batchNumber: 'BATCH-2026-SRM-092',
+  });
+  const [aiOosResult, setAiOosResult] = useState<any>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  // REST API Tester State
+  const [apiEndpoint, setApiEndpoint] = useState('/api/quality/inspections');
+  const [apiMethod, setApiMethod] = useState<'GET' | 'POST'>('GET');
+  const [apiPayload, setApiPayload] = useState('{\n  "itemName": "Test Active Ingredient",\n  "batchNumber": "BATCH-TEST-001"\n}');
+  const [apiResponse, setApiResponse] = useState<string | null>(null);
+  const [apiLoading, setApiLoading] = useState(false);
+
+  // Initial Fetch from Backend
+  useEffect(() => {
+    fetchInspections();
+    fetchLabSamples();
+    fetchInstruments();
+    fetchMicroTests();
+    fetchStabilityProtocols();
+    fetchCoaDocuments();
+    fetchDeviations();
+  }, []);
+
+  const fetchInspections = async () => {
+    try {
+      const res = await fetch('/api/quality/inspections');
+      const json = await res.json();
+      if (json.success && json.data?.length) setInspections(json.data);
+    } catch (e) {
+      console.warn('Using local initialInspections fallback');
+    }
+  };
+
+  const fetchLabSamples = async () => {
+    try {
+      const res = await fetch('/api/lims/samples');
+      const json = await res.json();
+      if (json.success && json.data?.length) setLabSamples(json.data);
+    } catch (e) {
+      console.warn('Using local initialLabSamples fallback');
+    }
+  };
+
+  const fetchInstruments = async () => {
+    try {
+      const res = await fetch('/api/lims/instruments');
+      const json = await res.json();
+      if (json.success && json.data?.length) setInstruments(json.data);
+    } catch (e) {
+      console.warn('Using local initialInstruments fallback');
+    }
+  };
+
+  const fetchMicroTests = async () => {
+    try {
+      const res = await fetch('/api/microbiology/tests');
+      const json = await res.json();
+      if (json.success && json.data?.length) setMicroTests(json.data);
+    } catch (e) {
+      console.warn('Using local initialMicroTests fallback');
+    }
+  };
+
+  const fetchStabilityProtocols = async () => {
+    try {
+      const res = await fetch('/api/stability/protocols');
+      const json = await res.json();
+      if (json.success && json.data?.length) setStabilityProtocols(json.data);
+    } catch (e) {
+      console.warn('Using local initialStabilityProtocols fallback');
+    }
+  };
+
+  const fetchCoaDocuments = async () => {
+    try {
+      const res = await fetch('/api/coa/documents');
+      const json = await res.json();
+      if (json.success && json.data?.length) setCoaList(json.data);
+    } catch (e) {
+      console.warn('Using local initialCoaDocuments fallback');
+    }
+  };
+
+  const fetchDeviations = async () => {
+    try {
+      const res = await fetch('/api/capa/deviations');
+      const json = await res.json();
+      if (json.success && json.data?.length) setDeviations(json.data);
+    } catch (e) {
+      console.warn('Using local initialDeviations fallback');
+    }
+  };
+
+  // Handlers for Submissions
+  const handleCreateInspection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      type: newInspection.type,
+      itemCode: newInspection.itemCode || `ITM-${Math.floor(100 + Math.random() * 900)}`,
+      itemName: newInspection.itemName,
+      batchNumber: newInspection.batchNumber,
+      supplierOrLine: newInspection.supplierOrLine || 'Gudang Utama / Cleanroom A',
+      quantity: newInspection.quantity || '1,000 Units',
+      inspectorName: newInspection.inspectorName,
+      parametersTested: [
+        { name: newInspection.param1Name, specification: newInspection.param1Spec, result: newInspection.param1Result, pass: true },
+        { name: newInspection.param2Name, specification: newInspection.param2Spec, result: newInspection.param2Result, pass: true },
+      ],
+      qcActionNotes: newInspection.qcActionNotes,
       status: 'Passed / Released',
-      aqlLevel: 'Level II Normal (AQL 0.65)',
-      sampleCount: 8,
-      parametersTested: [
-        { name: 'Kemurnian Assay', specification: '99.0% - 101.0%', result: '99.85%', pass: true },
-        { name: 'Titik Leleh', specification: '128.0°C - 131.0°C', result: '129.4°C', pass: true },
-        { name: 'Logam Berat (Pb)', specification: '< 10 ppm', result: '< 2 ppm', pass: true },
-        { name: 'Susut Pengeringan', specification: '< 0.5%', result: '0.18%', pass: true },
-      ],
-      qcActionNotes: 'Sesuai spesifikasi COA Supplier. Status release ke gudang utama.',
-    },
-    {
-      id: 'INSP-002',
-      inspectionNo: 'IPQC-2026-0810',
-      type: 'IPQC Compounding',
-      itemCode: 'BULK-SRM-001',
-      itemName: 'Bulk Serum CosmoGlow Brightening 1000L',
-      batchNumber: 'BATCH-2026-SRM-088',
-      supplierOrLine: 'Cleanroom Line A - Vessel 01',
-      quantity: '610 Kg',
-      inspectionDate: '2026-08-10',
-      inspectorName: 'Ahmad Hidayat (QC Analyst)',
-      status: 'Passed / Released',
-      sampleCount: 3,
-      parametersTested: [
-        { name: 'Derajat pH (25°C)', specification: '5.20 - 5.80', result: '5.48', pass: true },
-        { name: 'Viskositas Brookfield', specification: '3,000 - 4,000 cPs', result: '3,450 cPs', pass: true },
-        { name: 'Bobot Jenis (SG)', specification: '1.020 - 1.050 g/mL', result: '1.035 g/mL', pass: true },
-        { name: 'Organoleptik', specification: 'Cairan Jernih Agak Kental, Khas', result: 'Sesuai Standar', pass: true },
-      ],
-      qcActionNotes: 'In-Process QC Bulk Lulus. Siap ditransfer ke tangki penampung filling line.',
-    },
-    {
-      id: 'INSP-003',
-      inspectionNo: 'FGQC-2026-0812',
-      type: 'FGQC Finished Goods',
-      itemCode: 'FG-SRM-001',
-      itemName: 'CosmoGlow Intense Brightening Serum 30ml',
-      batchNumber: 'BATCH-2026-SRM-088',
-      supplierOrLine: 'Packaging Line A (Dropper Bottle)',
-      quantity: '20,000 Pcs',
-      inspectionDate: '2026-08-12',
-      inspectorName: 'Fitri Handayani, S.Si.',
-      status: 'Passed / Released',
-      aqlLevel: 'AQL 0.65 Major / 1.0 Minor',
-      sampleCount: 125,
-      parametersTested: [
-        { name: 'Kebocoran Penetapan Volume', specification: '30.0 ml ± 0.5 ml', result: '30.2 ml', pass: true },
-        { name: 'Torsi Capping Dropper', specification: '8.0 - 12.0 kgf.cm', result: '10.2 kgf.cm', pass: true },
-        { name: 'Kerapihan Label & Barcode', specification: 'Grade A No Smudge', result: 'Lulus Scanned 100%', pass: true },
-        { name: 'ALT Mikrobiologi (7 Hari)', specification: '< 100 CFU/g', result: '< 10 CFU/g (Pass)', pass: true },
-      ],
-      qcActionNotes: 'Lulus Uji Fisika, Kimia, & Mikrobiologi. COA Siap Diterbitkan oleh QA.',
-    },
-    {
-      id: 'INSP-004',
-      inspectionNo: 'IQC-2026-0814',
-      type: 'IQC Packaging',
-      itemCode: 'PKG-BOT-030',
-      itemName: 'Botol Kaca Frosted Amber 30ml + Pipet Dropper Gold',
-      batchNumber: 'LOT-GLASS-2026-99',
-      supplierOrLine: 'PT Packaging Indah Utama',
-      quantity: '50,000 Pcs',
-      inspectionDate: '2026-08-14',
-      inspectorName: 'Rudi Hermawan',
-      status: 'QC Hold',
-      aqlLevel: 'Level II AQL 1.0',
-      sampleCount: 200,
-      parametersTested: [
-        { name: 'Uji Keretakan Thermal', specification: 'Bebas retak mikro', result: 'Retak mikro 2.5%', pass: false },
-        { name: 'Presisi Ulir Botol', specification: 'Fit dengan Dropper', result: 'Sesuai Spec', pass: true },
-      ],
-      qcActionNotes: 'QC HOLD: Ditemukan keretakan mikro pada 5 dari 200 sampel (AQL Terlampaui). Menunggu keputusan NCR QA.',
-    },
-  ]);
+    };
 
-  // MOCK LABORATORY SAMPLES DATA
-  const [labSamples] = useState<LaboratorySample[]>([
-    {
-      id: 'SAMP-001',
-      sampleCode: 'SMP-202608-001',
-      requestNumber: 'TR-2026-088',
-      sourceType: 'Finished Product',
-      batchNumber: 'BATCH-2026-SRM-088',
-      itemName: 'CosmoGlow Intense Brightening Serum 30ml',
-      samplingDate: '2026-08-10 14:00',
-      sampledBy: 'Budi Santoso',
-      analystAssigned: 'Siti Aminah, Amd.AK',
-      testCategory: 'Microbiology',
-      status: 'Completed',
-      priority: 'Urgent',
-    },
-    {
-      id: 'SAMP-002',
-      sampleCode: 'SMP-202608-002',
-      requestNumber: 'TR-2026-089',
-      sourceType: 'Purified Water WFI',
-      batchNumber: 'LOOP-WFI-DAILY-10',
-      itemName: 'Water For Injection (WFI) Loop Station 3',
-      samplingDate: '2026-08-11 08:30',
-      sampledBy: 'Eko Prasetyo',
-      analystAssigned: 'Rina Kusuma, S.Si.',
-      testCategory: 'Chemical & Physical',
-      status: 'In Testing',
-      priority: 'Routine',
-    },
-    {
-      id: 'SAMP-003',
-      sampleCode: 'SMP-202608-003',
-      requestNumber: 'TR-2026-090',
-      sourceType: 'Raw Material',
-      batchNumber: 'LOT-DSM-20260715',
-      itemName: 'Niacinamide USP Pure Powder',
-      samplingDate: '2026-08-11 10:15',
-      sampledBy: 'Dewi Sartika',
-      analystAssigned: 'Bambang Supriyadi',
-      testCategory: 'Heavy Metal',
-      status: 'Completed',
-      priority: 'Routine',
-    },
-  ]);
+    try {
+      const res = await fetch('/api/quality/inspections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setInspections([json.data, ...inspections]);
+      } else {
+        throw new Error();
+      }
+    } catch (err) {
+      const mockNew: InspectionRecord = {
+        id: `INSP-${Date.now()}`,
+        inspectionNo: `INSP-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        type: newInspection.type,
+        itemCode: newInspection.itemCode || 'RM-NEW-001',
+        itemName: newInspection.itemName,
+        batchNumber: newInspection.batchNumber,
+        supplierOrLine: newInspection.supplierOrLine || 'Internal Facility',
+        quantity: newInspection.quantity || '500 Pcs',
+        inspectionDate: new Date().toISOString().substring(0, 10),
+        inspectorName: newInspection.inspectorName,
+        status: 'Passed / Released',
+        sampleCount: 10,
+        parametersTested: [
+          { name: newInspection.param1Name, specification: newInspection.param1Spec, result: newInspection.param1Result, pass: true },
+          { name: newInspection.param2Name, specification: newInspection.param2Spec, result: newInspection.param2Result, pass: true },
+        ],
+        qcActionNotes: newInspection.qcActionNotes,
+      };
+      setInspections([mockNew, ...inspections]);
+    }
 
-  // MOCK INSTRUMENT CALIBRATIONS
-  const [instruments] = useState<InstrumentCalibration[]>([
-    {
-      id: 'EQ-LAB-01',
-      equipmentCode: 'LAB-PH-01',
-      equipmentName: 'Precision Benchtop pH Meter with Temp Probe',
-      brandModel: 'Mettler Toledo SevenExcellence S400',
-      location: 'Laboratorium Kimia Fisika',
-      lastCalibrationDate: '2026-05-10',
-      nextCalibrationDue: '2026-11-10',
-      calibrationStatus: 'Calibrated / Valid',
-      certNumber: 'CAL-MT-2026-88',
-      calibratedBy: 'PT Kalibrasi Presisi Indonesia (External Kan)',
-    },
-    {
-      id: 'EQ-LAB-02',
-      equipmentCode: 'LAB-VISCO-02',
-      equipmentName: 'Digital Rotational Viscometer DV2T',
-      brandModel: 'Brookfield AMETEK DV2TRVT0',
-      location: 'Laboratorium Kimia Fisika',
-      lastCalibrationDate: '2026-02-15',
-      nextCalibrationDue: '2026-08-15',
-      calibrationStatus: 'Due Soon',
-      certNumber: 'CAL-BF-2026-12',
-      calibratedBy: 'Internal Maintenance & ISO Certified Standards',
-    },
-    {
-      id: 'EQ-LAB-03',
-      equipmentCode: 'LAB-HPLC-01',
-      equipmentName: 'High Performance Liquid Chromatography (HPLC) UV-Vis',
-      brandModel: 'Shimadzu Prominence LC-20AT',
-      location: 'Laboratorium Analisis Instrumentasi',
-      lastCalibrationDate: '2026-01-20',
-      nextCalibrationDue: '2027-01-20',
-      calibrationStatus: 'Calibrated / Valid',
-      certNumber: 'CAL-SHM-2026-01',
-      calibratedBy: 'Shimadzu Official Indonesia Service',
-    },
-  ]);
+    setShowNewInspectionModal(false);
+    setNewInspection({ ...newInspection, itemName: '', batchNumber: '' });
+  };
 
-  // MOCK MICROBIOLOGY TESTS
-  const [microTests] = useState<MicrobiologyTest[]>([
-    {
-      id: 'MICRO-001',
-      testNo: 'MIC-2026-088',
-      sampleName: 'CosmoGlow Serum 30ml (Retain Sample)',
-      batchNumber: 'BATCH-2026-SRM-088',
-      testType: 'ALT (Angka Lempeng Total)',
-      specLimit: '< 100 CFU/g (BPOM Kosmetik)',
-      actualResult: '< 10 CFU/g (Bebas Koloni)',
-      incubationTemp: '32.5°C ± 2.0°C',
-      incubationHours: '48 Jam',
-      status: 'Passed (Negative)',
-      testedBy: 'Amd. AK Ani Suryani',
-    },
-    {
-      id: 'MICRO-002',
-      testNo: 'MIC-2026-089',
-      sampleName: 'Cleanroom Class D Air Swab (Filling Zone)',
-      batchNumber: 'ENV-MON-2026-W32',
-      testType: 'Air Swab Cleanroom',
-      specLimit: '< 100 CFU/m³',
-      actualResult: '12 CFU/m³ (Lulus)',
-      incubationTemp: '35.0°C',
-      incubationHours: '72 Jam',
-      status: 'Passed (Negative)',
-      testedBy: 'Amd. AK Ani Suryani',
-    },
-  ]);
+  const handleToggleInspectionStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'Passed / Released' ? 'QC Hold' : 'Passed / Released';
+    setInspections((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: newStatus as any } : item))
+    );
 
-  // MOCK STABILITY STUDY
-  const [stabilityProtocols] = useState<StabilityStudyProtocol[]>([
-    {
-      id: 'STAB-001',
-      protocolCode: 'STB-SRM-2026-01',
-      productName: 'CosmoGlow Intense Brightening Serum 30ml',
-      batchNumber: 'BATCH-2026-SRM-088',
-      studyType: 'Accelerated (40°C/75% RH)',
-      chamberCode: 'CHAMBER-ACCEL-01',
-      startDate: '2026-08-01',
-      shelfLifeTargetMonths: 24,
-      currentStatus: 'On-Going Passed',
-      pullSchedule: [
-        { timePoint: 'Bulan 0 (Initial)', pullDate: '2026-08-01', status: 'Completed', pHResult: 5.48, viscosityCps: 3450, organolepticPass: true },
-        { timePoint: 'Bulan 1', pullDate: '2026-09-01', status: 'Scheduled' },
-        { timePoint: 'Bulan 3', pullDate: '2026-11-01', status: 'Scheduled' },
-        { timePoint: 'Bulan 6', pullDate: '2027-02-01', status: 'Scheduled' },
-      ],
-    },
-  ]);
+    try {
+      await fetch(`/api/quality/inspections/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+    } catch (e) {
+      // local state already updated
+    }
+  };
 
-  // MOCK COA DOCUMENTS
-  const [coaList] = useState<CoaDocument[]>([
-    {
-      id: 'COA-001',
-      coaNumber: 'COA/2026/08/SRM-088',
-      batchNumber: 'BATCH-2026-SRM-088',
-      productName: 'CosmoGlow Intense Brightening Serum 30ml',
-      productCode: 'FG-SRM-001',
-      manufacturingDate: '2026-08-10',
-      expiryDate: '2028-08-10 (24 Bulan)',
-      quantityProduced: '20,000 Pcs / Bottled',
-      clientName: 'PT Glow Aesthetic Indonesia (Maklon)',
-      approvedByQA: 'Eko Prasetyo, S.Farm., Apt. (Head of QA)',
-      digitalSignatureHash: 'SHA256: 8f92a11b0e34c98782a12ff31405a8e32bc12903ef8841a0e1239bc',
-      issueDate: '2026-08-12',
-      status: 'Issued & Approved',
-      testResults: [
-        { parameter: 'Pemerian / Appearance', method: 'Organoleptik', specification: 'Cairan jernih kental, aroma khas floral', result: 'Sesuai Spesifikasi' },
-        { parameter: 'Derajat pH (25°C)', method: 'Potensiometri (pH Meter)', specification: '5.20 - 5.80', result: '5.48' },
-        { parameter: 'Viskositas (25°C)', method: 'Brookfield Spindle 3 @ 30RPM', specification: '3,000 - 4,000 cPs', result: '3,450 cPs' },
-        { parameter: 'Kadar Niacinamide (Assay)', method: 'HPLC UV-Vis', specification: '4.80% - 5.20%', result: '5.02%' },
-        { parameter: 'Cemaran Logam Berat Pb', method: 'AAS Spectrophotometry', specification: '< 20 ppm', result: '< 2 ppm (Lulus)' },
-        { parameter: 'Angka Lempeng Total (ALT)', method: 'Pour Plate PCA (BPOM)', specification: '< 100 CFU/g', result: '< 10 CFU/g (Steril)' },
-        { parameter: 'Pathogen Pseudomonas & Staph', method: 'Enrichment Media', specification: 'Negatif per 1 gram', result: 'Negatif (Lulus)' },
-      ],
-    },
-  ]);
+  const handleCreateSample = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/lims/samples', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSample),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setLabSamples([json.data, ...labSamples]);
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      const local: LaboratorySample = {
+        id: `SAMP-${Date.now()}`,
+        sampleCode: `SMP-202608-${Math.floor(100 + Math.random() * 900)}`,
+        requestNumber: `TR-2026-${Math.floor(100 + Math.random() * 900)}`,
+        sourceType: newSample.sourceType,
+        batchNumber: newSample.batchNumber || 'BATCH-2026-NEW',
+        itemName: newSample.itemName,
+        samplingDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        sampledBy: newSample.sampledBy,
+        analystAssigned: newSample.analystAssigned,
+        testCategory: newSample.testCategory,
+        status: 'In Testing',
+        priority: newSample.priority,
+      };
+      setLabSamples([local, ...labSamples]);
+    }
 
-  // MOCK DEVIATIONS & CAPA
-  const [deviations] = useState<QualityDeviationCapa[]>([
-    {
-      id: 'DEV-001',
-      caseNo: 'DEV-2026-0810-01',
-      type: 'Deviation',
-      severity: 'Minor',
-      title: 'Fluktuasi Suhu Fase Air Tank Compounding 78.2°C',
-      batchNumber: 'BATCH-2026-SRM-088',
-      department: 'Production Compounding',
-      reportedDate: '2026-08-10',
+    setShowNewSampleModal(false);
+    setNewSample({ ...newSample, itemName: '', batchNumber: '' });
+  };
+
+  const handleCreateInstrument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/lims/instruments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newInstrument),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setInstruments([json.data, ...instruments]);
+      } else throw new Error();
+    } catch (e) {
+      const local: InstrumentCalibration = {
+        id: `EQ-LAB-${Date.now()}`,
+        equipmentCode: newInstrument.equipmentCode || `LAB-EQ-${Math.floor(10 + Math.random() * 90)}`,
+        equipmentName: newInstrument.equipmentName,
+        brandModel: newInstrument.brandModel || 'Precision Instrument',
+        location: newInstrument.location,
+        lastCalibrationDate: new Date().toISOString().substring(0, 10),
+        nextCalibrationDue: newInstrument.nextCalibrationDue || '2027-02-15',
+        calibrationStatus: 'Calibrated / Valid',
+        certNumber: newInstrument.certNumber || `CAL-${Math.floor(1000 + Math.random() * 9000)}`,
+        calibratedBy: newInstrument.calibratedBy,
+      };
+      setInstruments([local, ...instruments]);
+    }
+
+    setShowNewInstrumentModal(false);
+    setNewInstrument({ ...newInstrument, equipmentName: '', equipmentCode: '' });
+  };
+
+  const handleCreateMicro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/microbiology/tests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMicro),
+      });
+      const json = await res.json();
+      if (json.success && json.data) setMicroTests([json.data, ...microTests]);
+      else throw new Error();
+    } catch (e) {
+      const local: MicrobiologyTest = {
+        id: `MICRO-${Date.now()}`,
+        testNo: `MIC-2026-${Math.floor(100 + Math.random() * 900)}`,
+        sampleName: newMicro.sampleName,
+        batchNumber: newMicro.batchNumber || 'BATCH-2026-SRM-088',
+        testType: newMicro.testType,
+        specLimit: newMicro.specLimit,
+        actualResult: newMicro.actualResult,
+        incubationTemp: '32.5°C ± 2.0°C',
+        incubationHours: '48 Jam',
+        status: 'Passed (Negative)',
+        testedBy: newMicro.testedBy,
+      };
+      setMicroTests([local, ...microTests]);
+    }
+
+    setShowNewMicroModal(false);
+    setNewMicro({ ...newMicro, sampleName: '', batchNumber: '' });
+  };
+
+  const handleCreateStability = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/stability/protocols', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newStability),
+      });
+      const json = await res.json();
+      if (json.success && json.data) setStabilityProtocols([json.data, ...stabilityProtocols]);
+      else throw new Error();
+    } catch (e) {
+      const local: StabilityStudyProtocol = {
+        id: `STAB-${Date.now()}`,
+        protocolCode: `STB-SRM-2026-${Math.floor(10 + Math.random() * 90)}`,
+        productName: newStability.productName,
+        batchNumber: newStability.batchNumber || 'BATCH-2026-SRM-088',
+        studyType: newStability.studyType,
+        chamberCode: newStability.chamberCode,
+        startDate: new Date().toISOString().substring(0, 10),
+        shelfLifeTargetMonths: newStability.shelfLifeTargetMonths,
+        currentStatus: 'On-Going Passed',
+        pullSchedule: [
+          { timePoint: 'Bulan 0 (Initial)', pullDate: new Date().toISOString().substring(0, 10), status: 'Completed', pHResult: 5.48, viscosityCps: 3450 },
+          { timePoint: 'Bulan 1', pullDate: '2026-09-01', status: 'Scheduled' },
+          { timePoint: 'Bulan 3', pullDate: '2026-11-01', status: 'Scheduled' },
+        ],
+      };
+      setStabilityProtocols([local, ...stabilityProtocols]);
+    }
+
+    setShowNewStabilityModal(false);
+    setNewStability({ ...newStability, productName: '', batchNumber: '' });
+  };
+
+  const handleCreateCoa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/coa/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCoa),
+      });
+      const json = await res.json();
+      if (json.success && json.data) setCoaList([json.data, ...coaList]);
+      else throw new Error();
+    } catch (e) {
+      const local: CoaDocument = {
+        id: `COA-${Date.now()}`,
+        coaNumber: `COA/2026/08/SRM-${Math.floor(100 + Math.random() * 900)}`,
+        batchNumber: newCoa.batchNumber || 'BATCH-2026-SRM-088',
+        productName: newCoa.productName || 'CosmoGlow Serum 30ml',
+        productCode: 'FG-SRM-001',
+        manufacturingDate: new Date().toISOString().substring(0, 10),
+        expiryDate: '2028-08-10 (24 Bulan)',
+        quantityProduced: '20,000 Pcs',
+        clientName: newCoa.clientName,
+        approvedByQA: newCoa.approvedByQA,
+        digitalSignatureHash: `SHA256: ${Math.random().toString(36).substring(2, 15)}`,
+        issueDate: new Date().toISOString().substring(0, 10),
+        status: 'Issued & Approved',
+        testResults: [
+          { parameter: 'Pemerian / Appearance', method: 'Organoleptik', specification: 'Cairan jernih kental', result: 'Sesuai Spesifikasi' },
+          { parameter: 'Derajat pH (25°C)', method: 'Potensiometri', specification: '5.20 - 5.80', result: '5.48' },
+        ],
+      };
+      setCoaList([local, ...coaList]);
+    }
+
+    setShowNewCoaModal(false);
+    setNewCoa({ ...newCoa, batchNumber: '', productName: '' });
+  };
+
+  const handleCreateDeviation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      title: newDeviation.title,
+      severity: newDeviation.severity,
+      batchNumber: newDeviation.batchNumber,
+      department: newDeviation.department,
+      correctiveAction: newDeviation.correctiveAction,
+      preventiveAction: newDeviation.preventiveAction,
       rootCause5Why: [
-        'Mengapa suhu naik? Sensor thermostat chiller telat respon 2 menit.',
-        'Mengapa telat respon? Adanya kotoran pada katup solenoid pendingin.',
-        'Mengapa ada kotoran? Filtrasi pendingin belum dibersihkan pada jadwal PM mingguan.',
+        newDeviation.rootCause1 || 'Terjadi penyimpangan suhu pada tangki pembantu.',
+        newDeviation.rootCause2 || 'Sensor thermostat butuh pembersihan berkala.',
+        newDeviation.rootCause3 || 'Pembersihan filter ditambahkan ke jadwal PM.',
       ],
-      fishboneCategory: 'Machine',
-      correctiveAction: 'Pembersihan solenoid valve chiller dan verifikasi stabilitas active Niacinamide via HPLC (Hasil: 100% stabil).',
-      preventiveAction: 'Pembaruan SOP Maintenance Preventif mingguan untuk pembersihan strainer filter chiller.',
-      targetClosureDate: '2026-08-20',
-      status: 'CAPA Implemented',
-      verifiedByQA: 'Eko Prasetyo, Apt.',
-    },
-  ]);
+    };
+
+    try {
+      const res = await fetch('/api/capa/deviations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (json.success && json.data) setDeviations([json.data, ...deviations]);
+      else throw new Error();
+    } catch (e) {
+      const local: QualityDeviationCapa = {
+        id: `DEV-${Date.now()}`,
+        caseNo: `DEV-2026-0815-${Math.floor(10 + Math.random() * 90)}`,
+        type: 'Deviation',
+        severity: newDeviation.severity,
+        title: newDeviation.title,
+        batchNumber: newDeviation.batchNumber || 'BATCH-2026-SRM-088',
+        department: newDeviation.department,
+        reportedDate: new Date().toISOString().substring(0, 10),
+        rootCause5Why: payload.rootCause5Why,
+        fishboneCategory: 'Machine',
+        correctiveAction: newDeviation.correctiveAction || 'Verifikasi ulang kadar bahan aktif via HPLC.',
+        preventiveAction: newDeviation.preventiveAction || 'Pembaruan SOP Maintenance Preventif.',
+        targetClosureDate: '2026-08-25',
+        status: 'CAPA Implemented',
+        verifiedByQA: 'Eko Prasetyo, Apt.',
+      };
+      setDeviations([local, ...deviations]);
+    }
+
+    setShowNewDeviationModal(false);
+    setNewDeviation({ ...newDeviation, title: '', batchNumber: '' });
+  };
+
+  const handleRunAiOosAnalysis = async () => {
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/quality/ai-analyze-oos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(aiOosInput),
+      });
+      const json = await res.json();
+      if (json.success) setAiOosResult(json.analysis);
+    } catch (e) {
+      setAiOosResult({
+        parameter: aiOosInput.parameter,
+        specLimit: aiOosInput.specLimit,
+        actualValue: aiOosInput.actualValue,
+        batchNumber: aiOosInput.batchNumber,
+        severity: 'High Risk - Out of Spec (OOS)',
+        recommendation: 'Hentikan pengisian batch. Terbitkan Log Deviasi/NCR ke tim QA & lakukan uji homogenitas ulang.',
+        cpkbClause: 'Klausal 8.0 CPKB BPOM RI - Penanganan Produk Tidak Sesuai (Non-Conformance)',
+      });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleExecuteApiCall = async () => {
+    setApiLoading(true);
+    setApiResponse(null);
+    try {
+      const opts: RequestInit = {
+        method: apiMethod,
+        headers: { 'Content-Type': 'application/json' },
+      };
+      if (apiMethod === 'POST') opts.body = apiPayload;
+
+      const res = await fetch(apiEndpoint, opts);
+      const json = await res.json();
+      setApiResponse(JSON.stringify(json, null, 2));
+    } catch (e: any) {
+      setApiResponse(JSON.stringify({ error: e?.message || 'Failed to execute API request' }, null, 2));
+    } finally {
+      setApiLoading(false);
+    }
+  };
 
   const handleOpenCoaModal = (coa: CoaDocument) => {
     setSelectedCoa(coa);
     setShowCoaModal(true);
   };
+
+  const filteredInspections = inspections.filter((i) => {
+    const matchesFilter = inspectionFilter === 'All' || i.type === inspectionFilter;
+    const matchesSearch =
+      i.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.inspectionNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.batchNumber.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
 
   return (
     <div className="space-y-6 pb-12">
@@ -522,6 +676,14 @@ export const QualityLimsExplorer: React.FC = () => {
             </button>
 
             <button
+              onClick={() => setShowNewInspectionModal(true)}
+              className="flex items-center space-x-1.5 rounded-xl bg-purple-600 px-3 py-2 text-xs font-bold text-white hover:bg-purple-500 transition-all shadow-md"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Inspeksi QC Baru</span>
+            </button>
+
+            <button
               onClick={() => setShowNewSampleModal(true)}
               className="flex items-center space-x-1.5 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200 border border-slate-700 hover:bg-slate-800 transition-all"
             >
@@ -555,7 +717,9 @@ export const QualityLimsExplorer: React.FC = () => {
             <span>QC Hold Batch</span>
             <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
           </div>
-          <p className="text-lg font-black font-mono text-amber-300">1 Batch / Lot</p>
+          <p className="text-lg font-black font-mono text-amber-300">
+            {inspections.filter((i) => i.status === 'QC Hold').length} Batch / Lot
+          </p>
           <p className="text-[10px] text-amber-400 font-semibold">Gudang FEFO Blocked</p>
         </div>
 
@@ -564,7 +728,7 @@ export const QualityLimsExplorer: React.FC = () => {
             <span>Inspeksi IQC Material</span>
             <Boxes className="h-3.5 w-3.5 text-indigo-400" />
           </div>
-          <p className="text-lg font-black font-mono text-indigo-300">5 IQC Active</p>
+          <p className="text-lg font-black font-mono text-indigo-300">{inspections.length} Total IQC</p>
           <p className="text-[10px] text-emerald-400 font-semibold">AQL Standard Passed</p>
         </div>
 
@@ -573,7 +737,7 @@ export const QualityLimsExplorer: React.FC = () => {
             <span>Sampel Lab LIMS</span>
             <FlaskConical className="h-3.5 w-3.5 text-cyan-400" />
           </div>
-          <p className="text-lg font-black font-mono text-cyan-300">12 Samples</p>
+          <p className="text-lg font-black font-mono text-cyan-300">{labSamples.length} Samples</p>
           <p className="text-[10px] text-cyan-400 font-semibold">Assay & Micro Running</p>
         </div>
 
@@ -591,7 +755,7 @@ export const QualityLimsExplorer: React.FC = () => {
             <span>Stability Protocol</span>
             <Calendar className="h-3.5 w-3.5 text-purple-400" />
           </div>
-          <p className="text-lg font-black font-mono text-purple-300">4 Active</p>
+          <p className="text-lg font-black font-mono text-purple-300">{stabilityProtocols.length} Active</p>
           <p className="text-[10px] text-slate-400">24 Months Shelf Life</p>
         </div>
 
@@ -600,13 +764,18 @@ export const QualityLimsExplorer: React.FC = () => {
             <span>Penerbitan COA</span>
             <FileCheck2 className="h-3.5 w-3.5 text-emerald-400" />
           </div>
-          <p className="text-lg font-black font-mono text-emerald-300">100% Signed</p>
+          <p className="text-lg font-black font-mono text-emerald-300">{coaList.length} Signed</p>
           <p className="text-[10px] text-slate-400">BPOM & Client Ready</p>
         </div>
       </div>
 
       {/* Sub-Tabs Navigation */}
-      <div className="border-b border-slate-800 flex items-center space-x-1 overflow-x-auto text-xs font-bold scrollbar-none pb-1">
+      <div
+        onWheel={(e) => {
+          if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY;
+        }}
+        className="border-b border-slate-800 flex items-center space-x-1 overflow-x-auto text-xs font-bold custom-scrollbar scroll-smooth touch-pan-x pb-1"
+      >
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl transition-all whitespace-nowrap ${
@@ -766,17 +935,19 @@ export const QualityLimsExplorer: React.FC = () => {
                         <p className="text-[11px] text-slate-400">Batch/Lot: {item.batchNumber} • Sumber: {item.supplierOrLine}</p>
                       </div>
 
-                      <div className="text-right">
-                        <span
-                          className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase inline-block ${
+                      <div className="flex flex-col items-end gap-1.5">
+                        <button
+                          onClick={() => handleToggleInspectionStatus(item.id, item.status)}
+                          className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase inline-block cursor-pointer transition-transform hover:scale-105 ${
                             item.status === 'Passed / Released'
                               ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
                               : 'bg-amber-950 text-amber-300 border border-amber-500/40 animate-pulse'
                           }`}
+                          title="Klik untuk mengubah status (Release <-> Hold)"
                         >
-                          {item.status}
-                        </span>
-                        <p className="text-[10px] text-slate-400 mt-1">Inspektur: {item.inspectorName}</p>
+                          {item.status} ⇄
+                        </button>
+                        <p className="text-[10px] text-slate-400">Inspektur: {item.inspectorName}</p>
                       </div>
                     </div>
 
@@ -841,9 +1012,12 @@ export const QualityLimsExplorer: React.FC = () => {
                   <Scale className="h-4 w-4 text-cyan-400" />
                   <h3 className="text-xs font-bold text-white">Jadwal Kalibrasi Alat Lab</h3>
                 </div>
-                <span className="text-[10px] font-bold text-amber-300 bg-amber-950 border border-amber-500/30 px-2 py-0.5 rounded">
-                  1 Alat Due Soon
-                </span>
+                <button
+                  onClick={() => setShowNewInstrumentModal(true)}
+                  className="text-[10px] font-bold text-cyan-300 bg-cyan-950 border border-cyan-500/30 px-2 py-0.5 rounded hover:bg-cyan-900"
+                >
+                  + Alat
+                </button>
               </div>
 
               <div className="space-y-2.5 text-xs font-mono">
@@ -906,13 +1080,38 @@ export const QualityLimsExplorer: React.FC = () => {
               </p>
             </div>
 
-            <button
-              onClick={() => alert('Membuka Formulir Inspeksi Baru...')}
-              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Buat Inspeksi Baru</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Cari item / batch..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <select
+                value={inspectionFilter}
+                onChange={(e) => setInspectionFilter(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
+              >
+                <option value="All">Semua Tipe Inspeksi</option>
+                <option value="IQC Raw Material">IQC Raw Material</option>
+                <option value="IQC Packaging">IQC Packaging</option>
+                <option value="IPQC Compounding">IPQC Compounding</option>
+                <option value="FGQC Finished Goods">FGQC Finished Goods</option>
+              </select>
+
+              <button
+                onClick={() => setShowNewInspectionModal(true)}
+                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-lg"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Buat Inspeksi Baru</span>
+              </button>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4 shadow-xl">
@@ -927,11 +1126,11 @@ export const QualityLimsExplorer: React.FC = () => {
                     <th className="p-3">Inspektur & Tanggal</th>
                     <th className="p-3">Hasil Pengujian</th>
                     <th className="p-3">Keputusan Mutu</th>
-                    <th className="p-3">Aksi</th>
+                    <th className="p-3">Aksi Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80">
-                  {inspections.map((insp) => (
+                  {filteredInspections.map((insp) => (
                     <tr key={insp.id} className="hover:bg-slate-900/50">
                       <td className="p-3 font-bold">
                         <div className="text-purple-300">{insp.inspectionNo}</div>
@@ -975,10 +1174,10 @@ export const QualityLimsExplorer: React.FC = () => {
                       </td>
                       <td className="p-3">
                         <button
-                          onClick={() => alert(`Log Inspeksi ${insp.inspectionNo}\nCatatan: ${insp.qcActionNotes}`)}
+                          onClick={() => handleToggleInspectionStatus(insp.id, insp.status)}
                           className="px-2.5 py-1 rounded bg-slate-900 border border-slate-700 text-purple-300 hover:bg-slate-800 text-[11px] font-bold"
                         >
-                          Detail →
+                          Toggle Status ⇄
                         </button>
                       </td>
                     </tr>
@@ -1036,9 +1235,12 @@ export const QualityLimsExplorer: React.FC = () => {
             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4 shadow-xl">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-sm font-bold text-white">Registry & Kalibrasi Alat Laboratorium</h3>
-                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 border border-emerald-500/30 px-2.5 py-0.5 rounded font-bold">
-                  GLP Ready
-                </span>
+                <button
+                  onClick={() => setShowNewInstrumentModal(true)}
+                  className="text-[10px] font-mono text-emerald-400 bg-emerald-950 border border-emerald-500/30 px-2.5 py-0.5 rounded font-bold hover:bg-emerald-900"
+                >
+                  + Tambah Alat / Kalibrasi
+                </button>
               </div>
 
               <div className="space-y-3 font-mono text-xs">
@@ -1073,11 +1275,21 @@ export const QualityLimsExplorer: React.FC = () => {
       {/* SUB-TAB 4: MICROBIOLOGY & ENVIRONMENT */}
       {activeTab === 'microbiology' && (
         <div className="space-y-6">
-          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-            <h2 className="text-sm font-bold text-white">Laboratorium Mikrobiologi & Environmental Monitoring</h2>
-            <p className="text-xs text-slate-400">
-              Pengujian Sterilitas, Angka Lempeng Total (ALT), Angka Kapang Khamir (AKBK), Pathogen Screening, Bioburden Purified Water WFI, & Swab Udara Cleanroom.
-            </p>
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-white">Laboratorium Mikrobiologi & Environmental Monitoring</h2>
+              <p className="text-xs text-slate-400">
+                Pengujian Sterilitas, Angka Lempeng Total (ALT), Angka Kapang Khamir (AKBK), Pathogen Screening, Bioburden Purified Water WFI, & Swab Udara Cleanroom.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowNewMicroModal(true)}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Log Uji Mikrobiologi Baru</span>
+            </button>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4 shadow-xl">
@@ -1125,11 +1337,21 @@ export const QualityLimsExplorer: React.FC = () => {
       {/* SUB-TAB 5: STABILITY STUDY */}
       {activeTab === 'stability' && (
         <div className="space-y-6">
-          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-            <h2 className="text-sm font-bold text-white">Studi Stabilitas & Validasi Masa Simpan (Shelf Life)</h2>
-            <p className="text-xs text-slate-400">
-              Protokol Uji Stabilitas Dipercepat (Accelerated 40°C/75% RH) & Real-Time (30°C/65% RH), Penjadwalan Pulling Sampel, & Evaluasi Degradasi Formula.
-            </p>
+          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-white">Studi Stabilitas & Validasi Masa Simpan (Shelf Life)</h2>
+              <p className="text-xs text-slate-400">
+                Protokol Uji Stabilitas Dipercepat (Accelerated 40°C/75% RH) & Real-Time (30°C/65% RH), Penjadwalan Pulling Sampel, & Evaluasi Degradasi Formula.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowNewStabilityModal(true)}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Protokol Stabilitas Baru</span>
+            </button>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4 shadow-xl">
@@ -1198,13 +1420,15 @@ export const QualityLimsExplorer: React.FC = () => {
               </p>
             </div>
 
-            <button
-              onClick={() => handleOpenCoaModal(coaList[0])}
-              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-lg"
-            >
-              <FileCheck2 className="h-4 w-4" />
-              <span>Preview COA Terakhir</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowNewCoaModal(true)}
+                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-lg"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Terbitkan COA Baru</span>
+              </button>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4 shadow-xl">
@@ -1385,43 +1609,87 @@ export const QualityLimsExplorer: React.FC = () => {
           <div className="bg-slate-950 p-4 rounded-2xl border border-amber-500/30">
             <div className="flex items-center space-x-2">
               <Sparkles className="h-5 w-5 text-amber-300 animate-pulse" />
-              <h2 className="text-sm font-bold text-white">AI Quality Control & Predictive Analytics Assistant</h2>
+              <h2 className="text-sm font-bold text-white">AI Quality Control & OOS Risk Analyzer Assistant</h2>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Modul Inteligensi Buatan: Deteksi Anomali Viskositas/pH, Prediksi Reject Rate, Recommendation AQL Sampling, & Proyeksi Stabilitas Masa Simpan.
+              Modul Inteligensi Buatan: Deteksi Anomali Viskositas/pH, Evaluasi Out of Specification (OOS), Recommendations AQL Sampling, & Proyeksi Stabilitas.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-              <div className="flex justify-between items-center text-amber-300 font-bold">
-                <span>Prediksi Rate Rejection</span>
-                <Bot className="h-4 w-4" />
+          {/* Interactive AI OOS Tool Form */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4 shadow-xl">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">
+              Analisa AI Out-Of-Specification (OOS) Risk Generator
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono">
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Parameter Test</label>
+                <input
+                  type="text"
+                  value={aiOosInput.parameter}
+                  onChange={(e) => setAiOosInput({ ...aiOosInput, parameter: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-amber-500"
+                />
               </div>
-              <p className="text-slate-300 text-[11px]">
-                Probability Reject Kemasan Botol Kaca Amber turun dari 2.5% menjadi 0.2% jika supplier melakukan annealing ulang.
-              </p>
+
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Batas Spesifikasi Standard</label>
+                <input
+                  type="text"
+                  value={aiOosInput.specLimit}
+                  onChange={(e) => setAiOosInput({ ...aiOosInput, specLimit: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Hasil Pengujian Aktual</label>
+                <input
+                  type="text"
+                  value={aiOosInput.actualValue}
+                  onChange={(e) => setAiOosInput({ ...aiOosInput, actualValue: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Batch Number</label>
+                <input
+                  type="text"
+                  value={aiOosInput.batchNumber}
+                  onChange={(e) => setAiOosInput({ ...aiOosInput, batchNumber: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-              <div className="flex justify-between items-center text-emerald-300 font-bold">
-                <span>Deteksi Anomali pH Line A</span>
-                <Activity className="h-4 w-4" />
-              </div>
-              <p className="text-slate-300 text-[11px]">
-                Kurva pH serum stabil pada 5.48 (Toleransi 5.2 - 5.8). Tidak ditemukan tren keasaman abnormal.
-              </p>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={handleRunAiOosAnalysis}
+                disabled={aiLoading}
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg transition-all"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span>{aiLoading ? 'Menganalisa OOS...' : 'Jalankan Analisa AI OOS'}</span>
+              </button>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-              <div className="flex justify-between items-center text-cyan-300 font-bold">
-                <span>AI Shelf-Life Validation</span>
-                <Zap className="h-4 w-4" />
+            {aiOosResult && (
+              <div className="p-4 rounded-xl bg-slate-900 border border-amber-500/40 space-y-2 font-mono text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-amber-300 font-bold">Hasil Evaluasi AI Quality Intelligence</span>
+                  <span className="px-2 py-0.5 rounded bg-rose-950 text-rose-300 text-[10px] border border-rose-500/40">
+                    {aiOosResult.severity}
+                  </span>
+                </div>
+                <p className="text-white font-bold">Rekomendasi Tindakan Mutu:</p>
+                <p className="text-slate-300">{aiOosResult.recommendation}</p>
+                <p className="text-[10px] text-cyan-300 border-t border-slate-800 pt-1">
+                  Acuan Regulasi: {aiOosResult.cpkbClause}
+                </p>
               </div>
-              <p className="text-slate-300 text-[11px]">
-                Confidence score 99.4% untuk target masa simpan 24 Bulan tanpa degradasi warna atau aroma.
-              </p>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -1430,51 +1698,71 @@ export const QualityLimsExplorer: React.FC = () => {
       {activeTab === 'api_schema' && (
         <div className="space-y-6">
           <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800">
-            <h2 className="text-sm font-bold text-white">Database Schema Entities & REST API Documentation (Prompt 14)</h2>
+            <h2 className="text-sm font-bold text-white">Database Schema Entities & Live REST API Playground (Prompt 14)</h2>
             <p className="text-xs text-slate-400">
-              Spesifikasi Struktural Tabel Database Drizzle ORM / PostgreSQL & Endpoint REST API Backend LIMS/QC.
+              Uji Endpoint REST API Backend Quality Control & LIMS secara langsung dari aplikasi.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono text-xs">
-            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-              <h3 className="text-sm font-bold text-teal-300 border-b border-slate-800 pb-2">
-                Database Entities (Prompt 14)
-              </h3>
-              <ul className="space-y-1 text-slate-300 text-[11px] list-disc pl-4">
-                <li>quality_specifications</li>
-                <li>inspection_plans & inspection_results</li>
-                <li>sampling_plans</li>
-                <li>laboratory_samples & laboratory_tests</li>
-                <li>test_parameters & test_results</li>
-                <li>coa_documents & coc_documents</li>
-                <li>microbiology_tests</li>
-                <li>stability_protocols & stability_results</li>
-                <li>quality_deviations & quality_capa</li>
-                <li>non_conformance_reports</li>
-                <li>quality_audits</li>
-                <li>instrument_calibrations</li>
-                <li>laboratory_reagents & reference_standards</li>
-              </ul>
+          {/* Interactive REST API Playground */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4 shadow-xl">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+              Live REST API Playground & Tester
+            </h3>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2 font-mono text-xs">
+              <select
+                value={apiMethod}
+                onChange={(e) => setApiMethod(e.target.value as any)}
+                className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-emerald-400 font-bold focus:outline-none"
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+              </select>
+
+              <select
+                value={apiEndpoint}
+                onChange={(e) => setApiEndpoint(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none"
+              >
+                <option value="/api/quality/inspections">GET/POST /api/quality/inspections</option>
+                <option value="/api/lims/samples">GET/POST /api/lims/samples</option>
+                <option value="/api/lims/instruments">GET/POST /api/lims/instruments</option>
+                <option value="/api/microbiology/tests">GET/POST /api/microbiology/tests</option>
+                <option value="/api/stability/protocols">GET/POST /api/stability/protocols</option>
+                <option value="/api/coa/documents">GET/POST /api/coa/documents</option>
+                <option value="/api/capa/deviations">GET/POST /api/capa/deviations</option>
+              </select>
+
+              <button
+                onClick={handleExecuteApiCall}
+                disabled={apiLoading}
+                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs whitespace-nowrap"
+              >
+                {apiLoading ? 'Testing...' : 'Kirim Request'}
+              </button>
             </div>
 
-            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-              <h3 className="text-sm font-bold text-cyan-300 border-b border-slate-800 pb-2">
-                REST API Endpoints (/api/v1/...)
-              </h3>
-              <ul className="space-y-1.5 text-slate-300 text-[11px]">
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/quality/inspections</li>
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/quality/iqc</li>
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/quality/ipqc</li>
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/quality/fgqc</li>
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/lims/samples</li>
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/lims/calibrations</li>
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/microbiology/tests</li>
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/stability/protocols</li>
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/coa/generate</li>
-                <li><span className="text-emerald-400 font-bold">GET/POST</span> /api/capa/deviations</li>
-              </ul>
-            </div>
+            {apiMethod === 'POST' && (
+              <div className="space-y-1 font-mono text-xs">
+                <label className="text-slate-400 block text-[10px]">JSON Request Payload:</label>
+                <textarea
+                  rows={4}
+                  value={apiPayload}
+                  onChange={(e) => setApiPayload(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-cyan-300 focus:outline-none font-mono text-xs"
+                />
+              </div>
+            )}
+
+            {apiResponse && (
+              <div className="space-y-1 font-mono text-xs">
+                <label className="text-slate-400 block text-[10px]">Server Response JSON:</label>
+                <pre className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-emerald-400 overflow-x-auto text-xs max-h-60">
+                  {apiResponse}
+                </pre>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1485,7 +1773,6 @@ export const QualityLimsExplorer: React.FC = () => {
       {showCoaModal && selectedCoa && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm overflow-y-auto">
           <div className="relative w-full max-w-3xl rounded-2xl bg-white text-slate-900 p-8 shadow-2xl space-y-6 my-8">
-            {/* COA Header */}
             <div className="flex items-center justify-between border-b-2 border-slate-900 pb-4">
               <div>
                 <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">
@@ -1507,7 +1794,6 @@ export const QualityLimsExplorer: React.FC = () => {
               </div>
             </div>
 
-            {/* Product Metadata Table */}
             <div className="grid grid-cols-2 gap-4 text-xs font-mono bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div>
                 <span className="text-slate-500 text-[10px] block">Nama Produk:</span>
@@ -1527,7 +1813,6 @@ export const QualityLimsExplorer: React.FC = () => {
               </div>
             </div>
 
-            {/* Test Results Table */}
             <div className="space-y-2">
               <h4 className="text-xs font-black uppercase tracking-wider text-slate-900 border-b pb-1">
                 Hasil Uji Laboratorium Pengawasan Mutu (Quality Control)
@@ -1554,7 +1839,6 @@ export const QualityLimsExplorer: React.FC = () => {
               </table>
             </div>
 
-            {/* Conclusion & Digital Signature */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t-2 border-slate-900 pt-4 text-xs font-mono">
               <div>
                 <p className="text-slate-700 font-bold">Kesimpulan Mutu:</p>
@@ -1573,7 +1857,6 @@ export const QualityLimsExplorer: React.FC = () => {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex justify-end space-x-3 pt-2 border-t border-slate-200">
               <button
                 onClick={() => setShowCoaModal(false)}
@@ -1582,7 +1865,7 @@ export const QualityLimsExplorer: React.FC = () => {
                 Tutup
               </button>
               <button
-                onClick={() => alert('Mencetak COA Dokumen PDF Resmi dengan Stempel Digital...')}
+                onClick={() => window.print()}
                 className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold text-white flex items-center space-x-1.5"
               >
                 <Printer className="h-4 w-4" />
@@ -1593,20 +1876,129 @@ export const QualityLimsExplorer: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL: CREATE NEW INSPECTION */}
+      {showNewInspectionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl bg-slate-950 text-white p-6 border border-slate-800 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-white">Formulir Inspeksi Mutu Baru</h3>
+              <button onClick={() => setShowNewInspectionModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateInspection} className="space-y-3 text-xs font-mono">
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Tipe Inspeksi</label>
+                <select
+                  value={newInspection.type}
+                  onChange={(e) => setNewInspection({ ...newInspection, type: e.target.value as any })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value="IQC Raw Material">IQC Raw Material</option>
+                  <option value="IQC Packaging">IQC Packaging</option>
+                  <option value="IPQC Compounding">IPQC Compounding</option>
+                  <option value="FGQC Finished Goods">FGQC Finished Goods</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Nama Barang / Produk</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Salicylic Acid / CosmoGlow Serum"
+                  value={newInspection.itemName}
+                  onChange={(e) => setNewInspection({ ...newInspection, itemName: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block text-[10px] mb-1">Nomor Batch / Lot</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="BATCH-2026-SRM-099"
+                    value={newInspection.batchNumber}
+                    onChange={(e) => setNewInspection({ ...newInspection, batchNumber: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block text-[10px] mb-1">Pemasok / Line</label>
+                  <input
+                    type="text"
+                    placeholder="DSM / Line Cleanroom A"
+                    value={newInspection.supplierOrLine}
+                    onChange={(e) => setNewInspection({ ...newInspection, supplierOrLine: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block text-[10px] mb-1">Param 1 Result</label>
+                  <input
+                    type="text"
+                    value={newInspection.param1Result}
+                    onChange={(e) => setNewInspection({ ...newInspection, param1Result: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block text-[10px] mb-1">Param 2 Result</label>
+                  <input
+                    type="text"
+                    value={newInspection.param2Result}
+                    onChange={(e) => setNewInspection({ ...newInspection, param2Result: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewInspectionModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-purple-600 text-xs font-bold text-white hover:bg-purple-500"
+                >
+                  Simpan Inspeksi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL 2: REGISTER NEW LAB SAMPLE */}
       {showNewSampleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="relative w-full max-w-md rounded-2xl bg-slate-950 text-white p-6 border border-slate-800 shadow-2xl space-y-4">
-            <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">
-              Registrasi Sampel Uji LIMS Baru
-            </h3>
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-white">Registrasi Sampel Uji LIMS Baru</h3>
+              <button onClick={() => setShowNewSampleModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-            <div className="space-y-3 text-xs font-mono">
+            <form onSubmit={handleCreateSample} className="space-y-3 text-xs font-mono">
               <div>
                 <label className="text-slate-400 block text-[10px] mb-1">Nama Barang / Material</label>
                 <input
                   type="text"
+                  required
                   placeholder="e.g. Salicylic Acid 99% / Serum Bulk"
+                  value={newSample.itemName}
+                  onChange={(e) => setNewSample({ ...newSample, itemName: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
@@ -1615,97 +2007,358 @@ export const QualityLimsExplorer: React.FC = () => {
                 <label className="text-slate-400 block text-[10px] mb-1">Nomor Batch / Lot</label>
                 <input
                   type="text"
+                  required
                   placeholder="e.g. BATCH-2026-SRM-089"
+                  value={newSample.batchNumber}
+                  onChange={(e) => setNewSample({ ...newSample, batchNumber: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500"
                 />
               </div>
 
               <div>
                 <label className="text-slate-400 block text-[10px] mb-1">Kategori Pengujian LIMS</label>
-                <select className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500">
-                  <option>Chemical & Physical</option>
-                  <option>Microbiology (ALT/AKBK)</option>
-                  <option>Heavy Metal Spectrometry</option>
-                  <option>Assay Active HPLC</option>
+                <select
+                  value={newSample.testCategory}
+                  onChange={(e) => setNewSample({ ...newSample, testCategory: e.target.value as any })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="Chemical & Physical">Chemical & Physical</option>
+                  <option value="Microbiology">Microbiology (ALT/AKBK)</option>
+                  <option value="Heavy Metal">Heavy Metal Spectrometry</option>
+                  <option value="Assay Active">Assay Active HPLC</option>
                 </select>
               </div>
-            </div>
 
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <button
-                onClick={() => setShowNewSampleModal(false)}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
-              >
-                Batal
-              </button>
-              <button
-                onClick={() => {
-                  alert('Sampel LIMS Berhasil Didaftarkan dan Disimpan!');
-                  setShowNewSampleModal(false);
-                }}
-                className="px-3.5 py-1.5 rounded-lg bg-cyan-600 text-xs font-bold text-white hover:bg-cyan-500"
-              >
-                Simpan Sampel
-              </button>
-            </div>
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewSampleModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-cyan-600 text-xs font-bold text-white hover:bg-cyan-500"
+                >
+                  Simpan Sampel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* MODAL 3: NEW DEVIATION LOG */}
+      {/* MODAL 3: LOG INSTRUMENT CALIBRATION */}
+      {showNewInstrumentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl bg-slate-950 text-white p-6 border border-slate-800 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-white">Log Kalibrasi Alat Lab Baru</h3>
+              <button onClick={() => setShowNewInstrumentModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateInstrument} className="space-y-3 text-xs font-mono">
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Nama Alat / Instrumen</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Benchtop pH Meter / Refractometer"
+                  value={newInstrument.equipmentName}
+                  onChange={(e) => setNewInstrument({ ...newInstrument, equipmentName: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block text-[10px] mb-1">Kode Peralatan</label>
+                  <input
+                    type="text"
+                    placeholder="LAB-EQ-09"
+                    value={newInstrument.equipmentCode}
+                    onChange={(e) => setNewInstrument({ ...newInstrument, equipmentCode: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-400 block text-[10px] mb-1">Brand & Model</label>
+                  <input
+                    type="text"
+                    placeholder="Mettler Toledo S400"
+                    value={newInstrument.brandModel}
+                    onChange={(e) => setNewInstrument({ ...newInstrument, brandModel: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewInstrumentModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-500"
+                >
+                  Simpan Kalibrasi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: NEW MICROBIOLOGY TEST */}
+      {showNewMicroModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl bg-slate-950 text-white p-6 border border-slate-800 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-emerald-300">Log Uji Mikrobiologi Baru</h3>
+              <button onClick={() => setShowNewMicroModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateMicro} className="space-y-3 text-xs font-mono">
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Nama Sampel / Swab</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Cleanroom Swab / Serum Bulk"
+                  value={newMicro.sampleName}
+                  onChange={(e) => setNewMicro({ ...newMicro, sampleName: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Hasil Pengamatan CFU</label>
+                <input
+                  type="text"
+                  value={newMicro.actualResult}
+                  onChange={(e) => setNewMicro({ ...newMicro, actualResult: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewMicroModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-500"
+                >
+                  Simpan Uji Micro
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: NEW STABILITY PROTOCOL */}
+      {showNewStabilityModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl bg-slate-950 text-white p-6 border border-slate-800 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-amber-300">Protokol Uji Stabilitas Baru</h3>
+              <button onClick={() => setShowNewStabilityModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateStability} className="space-y-3 text-xs font-mono">
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Nama Produk</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Barrier Defense Cream 50g"
+                  value={newStability.productName}
+                  onChange={(e) => setNewStability({ ...newStability, productName: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Batch Number</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="BATCH-2026-CRM-010"
+                  value={newStability.batchNumber}
+                  onChange={(e) => setNewStability({ ...newStability, batchNumber: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewStabilityModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-amber-600 text-xs font-bold text-white hover:bg-amber-500"
+                >
+                  Simpan Protokol
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: GENERATE NEW COA */}
+      {showNewCoaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md rounded-2xl bg-slate-950 text-white p-6 border border-slate-800 shadow-2xl space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-teal-300">Terbitkan Certificate of Analysis (COA)</h3>
+              <button onClick={() => setShowNewCoaModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCoa} className="space-y-3 text-xs font-mono">
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Batch Number Produk</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="BATCH-2026-SRM-088"
+                  value={newCoa.batchNumber}
+                  onChange={(e) => setNewCoa({ ...newCoa, batchNumber: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-teal-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-400 block text-[10px] mb-1">Nama Produk</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="CosmoGlow Brightening Serum 30ml"
+                  value={newCoa.productName}
+                  onChange={(e) => setNewCoa({ ...newCoa, productName: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-teal-500"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewCoaModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-teal-600 text-xs font-bold text-white hover:bg-teal-500"
+                >
+                  Terbitkan COA
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 7: NEW DEVIATION LOG */}
       {showNewDeviationModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="relative w-full max-w-md rounded-2xl bg-slate-950 text-white p-6 border border-slate-800 shadow-2xl space-y-4">
-            <h3 className="text-sm font-bold text-rose-300 border-b border-slate-800 pb-2">
-              Log Penyimpangan (Deviation / NCR) Baru
-            </h3>
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h3 className="text-sm font-bold text-rose-300">Log Penyimpangan (Deviation / NCR) Baru</h3>
+              <button onClick={() => setShowNewDeviationModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-            <div className="space-y-3 text-xs font-mono">
+            <form onSubmit={handleCreateDeviation} className="space-y-3 text-xs font-mono">
               <div>
                 <label className="text-slate-400 block text-[10px] mb-1">Judul Deviasi Mutu</label>
                 <input
                   type="text"
+                  required
                   placeholder="e.g. Suhu Compounding Melebihi Toleransi"
+                  value={newDeviation.title}
+                  onChange={(e) => setNewDeviation({ ...newDeviation, title: e.target.value })}
                   className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-rose-500"
                 />
               </div>
 
-              <div>
-                <label className="text-slate-400 block text-[10px] mb-1">Tingkat Keparahan Risk</label>
-                <select className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-rose-500">
-                  <option>Minor</option>
-                  <option>Major</option>
-                  <option>Critical</option>
-                </select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-400 block text-[10px] mb-1">Tingkat Keparahan</label>
+                  <select
+                    value={newDeviation.severity}
+                    onChange={(e) => setNewDeviation({ ...newDeviation, severity: e.target.value as any })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-rose-500"
+                  >
+                    <option value="Minor">Minor</option>
+                    <option value="Major">Major</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block text-[10px] mb-1">Batch Number</label>
+                  <input
+                    type="text"
+                    placeholder="BATCH-2026-SRM-088"
+                    value={newDeviation.batchNumber}
+                    onChange={(e) => setNewDeviation({ ...newDeviation, batchNumber: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-rose-500"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="text-slate-400 block text-[10px] mb-1">Tindakan Penanganan Awal (Containment)</label>
+                <label className="text-slate-400 block text-[10px] mb-1">Tindakan Korektif (Corrective Action)</label>
                 <textarea
                   rows={2}
-                  placeholder="Tindakan langsung saat kejadian..."
+                  value={newDeviation.correctiveAction}
+                  onChange={(e) => setNewDeviation({ ...newDeviation, correctiveAction: e.target.value })}
+                  placeholder="Tindakan penanganan langsung..."
                   className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2 text-white focus:outline-none focus:border-rose-500"
                 />
               </div>
-            </div>
 
-            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
-              <button
-                onClick={() => setShowNewDeviationModal(false)}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
-              >
-                Batal
-              </button>
-              <button
-                onClick={() => {
-                  alert('Laporan Deviasi / NCR Berhasil Disimpan & Dikirimkan ke Tim QA!');
-                  setShowNewDeviationModal(false);
-                }}
-                className="px-3.5 py-1.5 rounded-lg bg-rose-600 text-xs font-bold text-white hover:bg-rose-500"
-              >
-                Kirimkan Laporan QA
-              </button>
-            </div>
+              <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewDeviationModal(false)}
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-rose-600 text-xs font-bold text-white hover:bg-rose-500"
+                >
+                  Kirim Laporan QA
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

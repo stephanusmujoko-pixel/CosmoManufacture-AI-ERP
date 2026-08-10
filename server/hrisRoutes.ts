@@ -7,11 +7,17 @@ import {
   initialPayrollPeriod,
   initialTrainingPrograms,
   initialPerformanceKpis,
+  initialCleanroomClearances,
+  initialShiftRosters,
+  initialSkillCompetencies,
   Employee,
   AttendanceRecord,
   LeaveRequest,
   OvertimeRequest,
   PayrollTransaction,
+  CleanroomClearance,
+  ShiftRoster,
+  SkillCompetency,
 } from './hrisData.js';
 
 export const hrisRouter = express.Router();
@@ -24,6 +30,9 @@ let overtimeRequests = [...initialOvertimeRequests];
 let payrollList = [...initialPayrollPeriod];
 let trainingList = [...initialTrainingPrograms];
 let kpiList = [...initialPerformanceKpis];
+let cleanroomClearancesList = [...initialCleanroomClearances];
+let shiftRostersList = [...initialShiftRosters];
+let skillCompetenciesList = [...initialSkillCompetencies];
 
 // ==========================================
 // 1. EMPLOYEES MASTER API
@@ -246,6 +255,122 @@ hrisRouter.get('/training', (req: Request, res: Response) => {
 
 hrisRouter.get('/performance', (req: Request, res: Response) => {
   res.json({ success: true, data: kpiList });
+});
+
+// ==========================================
+// 6. CLEANROOM CLEARANCE & GOWNING API
+// ==========================================
+hrisRouter.get('/cleanroom/clearance', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    count: cleanroomClearancesList.length,
+    data: cleanroomClearancesList,
+  });
+});
+
+hrisRouter.post('/cleanroom/clearance', (req: Request, res: Response) => {
+  const { employeeId, cleanroomGradeAccess, gowningScorePct, medicalStatus } = req.body;
+  const emp = employeesList.find((e) => e.employeeId === employeeId || e.id === employeeId);
+
+  const newClr: CleanroomClearance = {
+    id: `clr-${Date.now()}`,
+    employeeId: emp?.employeeId || 'EMP-2026-002',
+    employeeName: emp?.fullName || 'Operator Cleanroom',
+    department: emp?.department || 'Factory Production',
+    cleanroomGradeAccess: cleanroomGradeAccess || 'Grade B (Aseptic Mixing)',
+    gowningCompetencyScorePct: Number(gowningScorePct || 98),
+    medicalClearanceStatus: medicalStatus || 'Cleared (Fit for Cleanroom)',
+    lastSwabTestDate: new Date().toISOString().substring(0, 10),
+    swabTestResult: 'Negative (Pass)',
+    hygieneAuditScorePct: 100,
+    airShowerGateAccessGranted: true,
+    clearanceExpiryDate: '2027-02-08',
+  };
+
+  cleanroomClearancesList.unshift(newClr);
+  res.status(201).json({
+    success: true,
+    message: `Sertifikasi Cleanroom & Gowning untuk ${newClr.employeeName} berhasil disetujui.`,
+    data: newClr,
+  });
+});
+
+// ==========================================
+// 7. SHIFT ROSTER & LINE ALLOCATION API
+// ==========================================
+hrisRouter.get('/roster', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    count: shiftRostersList.length,
+    data: shiftRostersList,
+  });
+});
+
+hrisRouter.post('/roster', (req: Request, res: Response) => {
+  const { date, shiftName, lineLocation, lineLeader, cleanroomGrade } = req.body;
+
+  const newRoster: ShiftRoster = {
+    id: `rst-${Date.now()}`,
+    date: date || new Date().toISOString().substring(0, 10),
+    shiftName: shiftName || 'Shift 1 (07:00 - 15:00)',
+    lineLocation: lineLocation || 'Cleanroom Line 1 Mixing',
+    lineLeader: lineLeader || 'Agus Santoso (Prod SPV)',
+    assignedStaffCount: 4,
+    cleanroomGrade: cleanroomGrade || 'Grade B',
+    assignedOperators: [
+      {
+        employeeId: 'EMP-2026-002',
+        employeeName: 'Rian Hidayat, S.ST.',
+        position: 'Senior Operator',
+        machineQualification: 'MCH-MIX-01 Homogenizer',
+      },
+    ],
+  };
+
+  shiftRostersList.unshift(newRoster);
+  res.status(201).json({
+    success: true,
+    message: `Shift Roster untuk ${newRoster.lineLocation} berhasil dibuat.`,
+    data: newRoster,
+  });
+});
+
+// ==========================================
+// 8. SKILL MATRIX & COMPETENCY DIRECTORY API
+// ==========================================
+hrisRouter.get('/skill-matrix', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    count: skillCompetenciesList.length,
+    data: skillCompetenciesList,
+  });
+});
+
+// ==========================================
+// 9. AI HR ASSISTANT & MANPOWER PREDICTOR
+// ==========================================
+hrisRouter.post('/ai-hr/predict', (req: Request, res: Response) => {
+  const { targetLine, upcomingBatchCount } = req.body;
+
+  const reqBatch = Number(upcomingBatchCount || 5);
+  const calculatedOperatorNeeded = Math.ceil(reqBatch * 1.5);
+  const currentAvailableOperators = 8;
+  const gap = currentAvailableOperators - calculatedOperatorNeeded;
+
+  res.json({
+    success: true,
+    analysis: {
+      targetLine: targetLine || 'Cleanroom Mixing Line 1',
+      plannedBatches: reqBatch,
+      recommendedStaffCount: calculatedOperatorNeeded,
+      availableCertifiedStaff: currentAvailableOperators,
+      manpowerStatus: gap >= 0 ? 'Sufficient Certified Staff' : 'Shortage Warning (Overtime Recommended)',
+      recommendedOvertimeHours: gap < 0 ? Math.abs(gap) * 4 : 0,
+      cpkbComplianceCheck: '100% Medical Checkup & Gowning Certified',
+      turnoverRiskPercent: 4.2,
+      trainingRecommendation: 'Sertifikasi Tambahan untuk Operator Cadangan Homogenizer 1000L',
+    },
+  });
 });
 
 export default hrisRouter;

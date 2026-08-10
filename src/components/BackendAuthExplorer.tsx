@@ -172,7 +172,12 @@ export const BackendAuthExplorer: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-800 text-xs font-extrabold overflow-x-auto">
+      <div
+        onWheel={(e) => {
+          if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY;
+        }}
+        className="flex border-b border-slate-800 text-xs font-extrabold overflow-x-auto custom-scrollbar scroll-smooth touch-pan-x py-1"
+      >
         <button
           onClick={() => setActiveTab('sandbox')}
           className={`pb-3 px-5 whitespace-nowrap transition-all ${

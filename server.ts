@@ -12,6 +12,10 @@ import eamCmmsRouter from './server/eamCmmsRoutes.js';
 import { financeRouter } from './server/financeRoutes.js';
 import { hrisRouter } from './server/hrisRoutes.js';
 import { biRouter } from './server/biRoutes.js';
+import { regulatoryRouter } from './server/regulatoryRoutes.js';
+import { qualityRouter } from './server/qualityRoutes.js';
+import { ppicRouter } from './server/ppicRoutes.js';
+import { wmsRouter } from './server/wmsRoutes.js';
 
 const app = express();
 const PORT = 3000;
@@ -28,6 +32,12 @@ app.use('/api', masterRouter);
 app.use('/api', crmRouter);
 // Mount Prompt 8 Purchasing & Procurement Enterprise Routes
 app.use('/api', procurementRouter);
+// Mount Prompt 12 PPIC & Material Requirement Planning (MRP) Enterprise Routes
+app.use('/api', ppicRouter);
+// Mount Prompt 13 Warehouse Management System (WMS) Enterprise Routes
+app.use('/api', wmsRouter);
+// Mount Prompt 14 Quality Control, QA & LIMS Enterprise Routes
+app.use('/api', qualityRouter);
 // Mount Prompt 15 Research & Development (R&D) & PLM Enterprise Routes
 app.use('/api', rdPlmRouter);
 // Mount Prompt 16 Enterprise Asset Management (EAM) & CMMS Routes
@@ -38,6 +48,8 @@ app.use('/api', financeRouter);
 app.use('/api', hrisRouter);
 // Mount Prompt 19 Business Intelligence (BI), AI Copilot & Executive Dashboard Routes
 app.use('/api', biRouter);
+// Mount Regulatory & BPOM / CPKB Compliance Routes
+app.use('/api', regulatoryRouter);
 
 // Initialize Gemini Client
 const ai = new GoogleGenAI({
@@ -193,6 +205,11 @@ Berikan analisis terstruktur mencakup:
       details: error.message || String(error),
     });
   }
+});
+
+// Catch-all handler for unhandled API routes to guarantee JSON 404
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: `API route ${req.method} ${req.path} not found.` });
 });
 
 // Serve frontend with Vite in dev, or static files in production

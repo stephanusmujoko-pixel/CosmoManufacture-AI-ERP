@@ -134,6 +134,34 @@ export interface SupplierInvoice {
   createdDate: string;
 }
 
+export interface BlanketPurchaseOrder {
+  id: string;
+  contractNumber: string;
+  supplierCode: string;
+  supplierName: string;
+  materialName: string;
+  itemCode: string;
+  contractedPricePerUnitRp: number;
+  totalAgreedQuantityKg: number;
+  releasedQuantityKg: number;
+  remainingQuantityKg: number;
+  validFrom: string;
+  validTo: string;
+  status: 'Active' | 'Expired' | 'Fulfilled';
+}
+
+export interface VendorAuditRecord {
+  supplierCode: string;
+  supplierName: string;
+  gmpCpkbStatus: 'CPKB / GMP Certified' | 'ISO 22716 Certified' | 'Under Audit' | 'Non-Compliant';
+  halalStatus: 'Halal LPPOM MUI Certified' | 'Non-Halal' | 'Pending Verification';
+  bpomRawMaterialCode: string;
+  lastAuditDate: string;
+  nextAuditDueDate: string;
+  coaCompliancePct: number;
+  qualificationStatus: 'Qualified (Preferred)' | 'Conditional Approval' | 'Suspended';
+}
+
 export interface VendorPerformanceScore {
   supplierCode: string;
   supplierName: string;
@@ -143,7 +171,78 @@ export interface VendorPerformanceScore {
   responseScorePct: number;
   overallVendorScore: number; // 0 - 100
   tierCategory: 'Class A (Preferred Partner)' | 'Class B (Approved Vendor)' | 'Class C (Under Warning)';
+  auditInfo?: VendorAuditRecord;
 }
+
+// Seed Mock Data
+export const dbBlanketPurchaseOrders: BlanketPurchaseOrder[] = [
+  {
+    id: 'bpo-001',
+    contractNumber: 'BPO/CPKB/2026/01/008',
+    supplierCode: 'SUP-ID-001',
+    supplierName: 'PT Chemical Nusantara Fine Ingredients',
+    materialName: 'Niacinamide 99% USP Cosmetic Grade',
+    itemCode: 'RM-ACT-001',
+    contractedPricePerUnitRp: 170000,
+    totalAgreedQuantityKg: 5000,
+    releasedQuantityKg: 2000,
+    remainingQuantityKg: 3000,
+    validFrom: '2026-01-01',
+    validTo: '2026-12-31',
+    status: 'Active',
+  },
+  {
+    id: 'bpo-002',
+    contractNumber: 'BPO/CPKB/2026/03/012',
+    supplierCode: 'SUP-SG-002',
+    supplierName: 'PureBio Ingredients Asia Pte Ltd',
+    materialName: 'Hyaluronic Acid Multi-Molecular Powder',
+    itemCode: 'RM-ACT-003',
+    contractedPricePerUnitRp: 1150000,
+    totalAgreedQuantityKg: 500,
+    releasedQuantityKg: 200,
+    remainingQuantityKg: 300,
+    validFrom: '2026-03-01',
+    validTo: '2027-02-28',
+    status: 'Active',
+  },
+];
+
+export const dbVendorAudits: VendorAuditRecord[] = [
+  {
+    supplierCode: 'SUP-ID-001',
+    supplierName: 'PT Chemical Nusantara Fine Ingredients',
+    gmpCpkbStatus: 'CPKB / GMP Certified',
+    halalStatus: 'Halal LPPOM MUI Certified',
+    bpomRawMaterialCode: 'BPOM-RAW-99210-NIA',
+    lastAuditDate: '2026-02-15',
+    nextAuditDueDate: '2027-02-14',
+    coaCompliancePct: 99.8,
+    qualificationStatus: 'Qualified (Preferred)',
+  },
+  {
+    supplierCode: 'SUP-SG-002',
+    supplierName: 'PureBio Ingredients Asia Pte Ltd',
+    gmpCpkbStatus: 'ISO 22716 Certified',
+    halalStatus: 'Halal LPPOM MUI Certified',
+    bpomRawMaterialCode: 'BPOM-RAW-88102-HA',
+    lastAuditDate: '2025-11-20',
+    nextAuditDueDate: '2026-11-19',
+    coaCompliancePct: 98.5,
+    qualificationStatus: 'Qualified (Preferred)',
+  },
+  {
+    supplierCode: 'SUP-PK-003',
+    supplierName: 'PT Packaging Indah Botol Plastik',
+    gmpCpkbStatus: 'Under Audit',
+    halalStatus: 'Pending Verification',
+    bpomRawMaterialCode: 'BPOM-PKG-33120',
+    lastAuditDate: '2026-05-10',
+    nextAuditDueDate: '2026-11-10',
+    coaCompliancePct: 94.0,
+    qualificationStatus: 'Conditional Approval',
+  },
+];
 
 // Seed Mock Data
 export const dbPurchaseRequisitions: PurchaseRequisition[] = [

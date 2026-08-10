@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Boxes,
   QrCode,
@@ -39,8 +39,8 @@ import {
   Flame,
   Activity,
   UserCheck,
+  Send,
 } from 'lucide-react';
-import { formatCurrencyIDR } from '../lib/utils';
 
 // Types for WMS
 export interface WarehouseMaster {
@@ -120,6 +120,21 @@ export interface StockMovement {
   timestamp: string;
 }
 
+export interface StockOpnameItem {
+  id: string;
+  opnameNumber: string;
+  binLocation: string;
+  materialName: string;
+  batchLot: string;
+  systemQtyKg: number;
+  physicalQtyKg: number;
+  discrepancyKg: number;
+  discrepancyValueIdr: number;
+  status: 'matched' | 'discrepancy' | 'adjusted';
+  countedBy: string;
+  countDate: string;
+}
+
 export const WmsExplorer: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<
     'dashboard_map' | 'receiving' | 'picking_shipping' | 'transfers' | 'stock_opname' | 'ai_assistant' | 'audit_barcodes'
@@ -130,10 +145,23 @@ export const WmsExplorer: React.FC = () => {
   const [selectedWarehouseFilter, setSelectedWarehouseFilter] = useState<string>('all');
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [scannedResult, setScannedResult] = useState<string | null>(null);
+  
+  // Modals state
   const [showNewReceivingModal, setShowNewReceivingModal] = useState(false);
+  const [showNewWarehouseModal, setShowNewWarehouseModal] = useState(false);
+  const [showNewBinModal, setShowNewBinModal] = useState(false);
+  const [showNewPickingModal, setShowNewPickingModal] = useState(false);
+  const [showNewTransferModal, setShowNewTransferModal] = useState(false);
+  const [showNewOpnameModal, setShowNewOpnameModal] = useState(false);
+  const [showPrintLabelModal, setShowPrintLabelModal] = useState(false);
+  const [labelToPrint, setLabelToPrint] = useState<{ type: string; title: string; code: string; lot?: string }>({
+    type: 'Bin Location',
+    title: 'WH01-ZA-R04-S02-B18',
+    code: 'LOC-W1-ZA-R04-S02-B18',
+  });
 
-  // Mock Warehouses Data
-  const [warehouses] = useState<WarehouseMaster[]>([
+  // Warehouses State
+  const [warehouses, setWarehouses] = useState<WarehouseMaster[]>([
     {
       id: 'WH-01',
       code: 'WH-RM-01',
@@ -206,7 +234,7 @@ export const WmsExplorer: React.FC = () => {
     qtyKg: 250,
   });
 
-  // Mock Receipts
+  // Receipts State
   const [receipts, setReceipts] = useState<GoodsReceipt[]>([
     {
       id: 'GRN-001',
@@ -243,26 +271,9 @@ export const WmsExplorer: React.FC = () => {
       storageCondition: 'Cold Room (2-8°C)',
       receivedDate: '2026-08-06 10:15',
     },
-    {
-      id: 'GRN-003',
-      grnNumber: 'GRN-202608-0114',
-      poReference: 'PO-2026-0902',
-      supplierName: 'Evonik Specialty Chemicals',
-      materialName: 'Ceramide NP Pure Powder',
-      inciName: 'Ceramide NP',
-      receivedQtyKg: 50,
-      batchSupplier: 'EVK-CRM-7718',
-      internalLotNumber: 'LOT-CRM-2026-01',
-      mfdDate: '2026-05-20',
-      expDate: '2028-05-19',
-      inspectionStatus: 'quarantine',
-      suggestedLocation: 'WH-RM-01 / Quarantine Zone Q / Rack RQ-01',
-      storageCondition: 'Cold Room (2-8°C)',
-      receivedDate: '2026-08-06 14:00',
-    },
   ]);
 
-  // Mock Picking Orders
+  // Picking Orders State
   const [pickingOrders, setPickingOrders] = useState<PickingOrder[]>([
     {
       id: 'PK-01',
@@ -278,24 +289,10 @@ export const WmsExplorer: React.FC = () => {
       status: 'picking_in_progress',
       expiryDate: '2028-06-14',
     },
-    {
-      id: 'PK-02',
-      pickOrderNumber: 'PICK-SO-2026-0812',
-      referenceType: 'sales_order',
-      referenceNumber: 'SO-MAKLON-7782 (GlowSkin Brand)',
-      targetCustomerOrBatch: 'PT GlowSkin Beauty Indonesia',
-      materialName: 'Finished Goods: Sunscreen SPF 50 PA++++ 50ml',
-      requiredQtyKg: 2500, // units/kg
-      allocatedBatch: 'FG-SUN-2026-12',
-      sourceLocation: 'WH-FG-04 / Zone Dispatch / Rack R-10 / Bin B-01',
-      pickingStrategy: 'FIFO',
-      status: 'pending',
-      expiryDate: '2027-12-30',
-    },
   ]);
 
-  // Mock Stock Movements
-  const [movements] = useState<StockMovement[]>([
+  // Stock Movements State
+  const [movements, setMovements] = useState<StockMovement[]>([
     {
       id: 'TR-101',
       transferNumber: 'TRF-202608-0021',
@@ -309,49 +306,378 @@ export const WmsExplorer: React.FC = () => {
       status: 'completed',
       timestamp: '2026-08-06 11:20',
     },
+  ]);
+
+  // Stock Opname State
+  const [opnameList, setOpnameList] = useState<StockOpnameItem[]>([
     {
-      id: 'TR-102',
-      transferNumber: 'TRF-202608-0022',
-      movementType: 'production_issue',
-      materialName: 'Glycerin Botanical 99.7%',
-      batchLot: 'LOT-GLY-2026-03',
-      qtyKg: 300,
-      sourceLocation: 'WH-RM-01 / Zone B / Bin B-40',
-      targetLocation: 'Cleanroom Dispensing Room 2',
-      requestedBy: 'Operator MES - Ahmad Fauzi',
-      status: 'approved',
-      timestamp: '2026-08-06 13:45',
+      id: 'SO-001',
+      opnameNumber: 'SO-2026-Q3-01',
+      binLocation: 'WH01-ZA-R01-S01-B01',
+      materialName: 'Niacinamide USP Grade 99.5%',
+      batchLot: 'LOT-NIA-202506-01',
+      systemQtyKg: 250,
+      physicalQtyKg: 250,
+      discrepancyKg: 0,
+      discrepancyValueIdr: 0,
+      status: 'matched',
+      countedBy: 'Rian Stock Auditor',
+      countDate: '2026-08-07',
+    },
+    {
+      id: 'SO-002',
+      opnameNumber: 'SO-2026-Q3-02',
+      binLocation: 'WH02-ZB-CR02-S02-B04',
+      materialName: 'Squalane 99% Olive Derived',
+      batchLot: 'LOT-SQU-202508-03',
+      systemQtyKg: 125,
+      physicalQtyKg: 120,
+      discrepancyKg: -5,
+      discrepancyValueIdr: -2250000,
+      status: 'discrepancy',
+      countedBy: 'Rian Stock Auditor',
+      countDate: '2026-08-07',
     },
   ]);
 
-  // Handle Barcode Scan Simulation
+  // AI Chat Assistant State
+  const [aiMessages, setAiMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([
+    {
+      role: 'assistant',
+      text: 'Halo! Saya **AI Autonomous Warehouse Bot** (Gemini AI). Saya dapat membantu rekomendasi Put-Away Cold Storage, deteksi risiko FEFO expired, alokasi Wave Picking, dan audit discrepancy Stock Opname.',
+    },
+  ]);
+  const [aiInput, setAiInput] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+  // Form States for Modals
+  const [newWhForm, setNewWhForm] = useState({
+    code: 'WH-NEW-05',
+    name: 'Gudang Bahan Baku Tambahan & Solvent',
+    factory: 'Pabrik Cikarang Plant A',
+    manager: 'Budi Santoso, S.T.',
+    temperatureType: 'Room Temp (20-25°C)' as const,
+    capacityBins: 800,
+  });
+
+  const [newGrnForm, setNewGrnForm] = useState({
+    poReference: 'PO-2026-0920',
+    supplierName: 'Mibelle Biochemistry Switzerland',
+    materialName: 'PhytoCellTec Malus Domestica (Apple Stemcell)',
+    inciName: 'Malus Domestica Fruit Cell Culture Extract',
+    receivedQtyKg: 25,
+    batchSupplier: 'MIB-APP-9912',
+    mfdDate: '2026-07-01',
+    expDate: '2028-07-01',
+    storageCondition: 'Cold Room (2-8°C)',
+  });
+
+  const [newPickForm, setNewPickForm] = useState({
+    referenceType: 'work_order' as const,
+    referenceNumber: 'WO-BATCH-9905 (Cream Moisturizer 500L)',
+    targetCustomerOrBatch: 'Tangki Emulsifier Vessel 2',
+    materialName: 'Squalane 99% Olive Derived',
+    requiredQtyKg: 35,
+    pickingStrategy: 'FEFO' as const,
+  });
+
+  const [newTrfForm, setNewTrfForm] = useState({
+    movementType: 'bin_to_bin' as const,
+    materialName: 'Niacinamide USP Grade 99.5%',
+    batchLot: 'LOT-NCP-2026-08',
+    qtyKg: 50,
+    sourceLocation: 'WH01-ZA-R01-S01-B01',
+    targetLocation: 'CLEANROOM-DISPENSING-A',
+    requestedBy: 'Ahmad Operator MES',
+  });
+
+  const [newOpnameForm, setNewOpnameForm] = useState({
+    binLocation: 'WH01-ZA-R01-S01-B01',
+    materialName: 'Niacinamide USP Grade 99.5%',
+    batchLot: 'LOT-NCP-2026-08',
+    systemQtyKg: 250,
+    physicalQtyKg: 248,
+    countedBy: 'Rian Stock Auditor',
+  });
+
+  // Fetch Initial Data from API
+  useEffect(() => {
+    // 1. Warehouses
+    fetch('/api/wms/warehouses')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setWarehouses(data.data);
+        }
+      })
+      .catch((err) => console.error('Error fetching warehouses:', err));
+
+    // 2. Receipts GRN
+    fetch('/api/wms/receipts')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setReceipts(data.data);
+        }
+      })
+      .catch((err) => console.error('Error fetching receipts:', err));
+
+    // 3. Picking Orders
+    fetch('/api/wms/picking')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setPickingOrders(data.data);
+        }
+      })
+      .catch((err) => console.error('Error fetching picking orders:', err));
+
+    // 4. Transfers
+    fetch('/api/wms/transfers')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setMovements(data.data);
+        }
+      })
+      .catch((err) => console.error('Error fetching transfers:', err));
+
+    // 5. Stock Opname
+    fetch('/api/wms/stock-opname')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          setOpnameList(data.data);
+        }
+      })
+      .catch((err) => console.error('Error fetching stock opname:', err));
+  }, []);
+
+  // Barcode scan simulator handler
   const handleSimulateScan = (code: string) => {
     setScannedResult(code);
     setShowScannerModal(false);
   };
 
-  // Quick Action for New Goods Receipt
-  const handleCreateReceiving = () => {
+  // Submit New Warehouse
+  const handleCreateWarehouseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const newWh: WarehouseMaster = {
+      id: `WH-${String(warehouses.length + 1).padStart(2, '0')}`,
+      code: newWhForm.code,
+      name: newWhForm.name,
+      factory: newWhForm.factory,
+      address: 'Kawasan Industri Jababeka V',
+      manager: newWhForm.manager,
+      temperatureType: newWhForm.temperatureType,
+      humidityControl: '55% RH',
+      totalCapacityBins: Number(newWhForm.capacityBins),
+      usedBins: 0,
+      status: 'active',
+    };
+
+    setWarehouses([newWh, ...warehouses]);
+    setShowNewWarehouseModal(false);
+
+    try {
+      await fetch('/api/wms/warehouses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newWhForm),
+      });
+    } catch (err) {
+      console.error('Failed to post new warehouse:', err);
+    }
+  };
+
+  // Submit New GRN Goods Receipt
+  const handleCreateReceivingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const grnNo = `GRN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(receipts.length + 1).padStart(3, '0')}`;
     const newGRN: GoodsReceipt = {
-      id: `GRN-00${receipts.length + 1}`,
-      grnNumber: `GRN-202608-0${115 + receipts.length}`,
-      poReference: `PO-2026-09${10 + receipts.length}`,
-      supplierName: 'Mibelle Biochemistry Switzerland',
-      materialName: 'PhytoCellTec Malus Domestica (Apple Stemcell)',
-      inciName: 'Malus Domestica Fruit Cell Culture Extract',
-      receivedQtyKg: 25,
-      batchSupplier: `MIB-APP-${Math.floor(1000 + Math.random() * 9000)}`,
-      internalLotNumber: `LOT-APP-2026-0${receipts.length + 1}`,
-      mfdDate: '2026-07-15',
-      expDate: '2028-07-14',
-      inspectionStatus: 'qc_passed',
-      suggestedLocation: 'WH-COLD-02 / Cold Zone C1 / Rack R-02 / Bin B-05',
-      assignedLocation: 'WH-COLD-02 / Cold Zone C1 / Rack R-02 / Bin B-05',
-      storageCondition: 'Cold Room (2-8°C)',
+      id: `GRN-${Date.now()}`,
+      grnNumber: grnNo,
+      poReference: newGrnForm.poReference,
+      supplierName: newGrnForm.supplierName,
+      materialName: newGrnForm.materialName,
+      inciName: newGrnForm.inciName,
+      receivedQtyKg: Number(newGrnForm.receivedQtyKg),
+      batchSupplier: newGrnForm.batchSupplier,
+      internalLotNumber: `LOT-INT-${Math.floor(1000 + Math.random() * 9000)}`,
+      mfdDate: newGrnForm.mfdDate,
+      expDate: newGrnForm.expDate,
+      inspectionStatus: 'qc_hold',
+      suggestedLocation: newGrnForm.storageCondition.includes('Cold')
+        ? 'WH02-ZB-CR02-S02-B04'
+        : 'WH01-ZA-R01-S01-B01',
+      storageCondition: newGrnForm.storageCondition,
       receivedDate: new Date().toISOString().slice(0, 16).replace('T', ' '),
     };
+
     setReceipts([newGRN, ...receipts]);
     setShowNewReceivingModal(false);
+
+    try {
+      await fetch('/api/wms/receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newGrnForm),
+      });
+    } catch (err) {
+      console.error('Failed to post receiving GRN:', err);
+    }
+  };
+
+  // Confirm Putaway
+  const handleConfirmPutaway = async (grnId: string, location: string) => {
+    setReceipts((prev) =>
+      prev.map((g) => (g.id === grnId ? { ...g, assignedLocation: location } : g))
+    );
+
+    try {
+      await fetch(`/api/wms/receipts/${grnId}/putaway`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignedLocation: location }),
+      });
+      alert(`✓ Lokasi Put-Away berhasil dikonfirmasi ke ${location}!`);
+    } catch (err) {
+      console.error('Failed to confirm putaway:', err);
+    }
+  };
+
+  // Submit Wave Picking
+  const handleCreatePickingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const newPick: PickingOrder = {
+      id: `PICK-${Date.now()}`,
+      pickOrderNumber: `WAVE-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(pickingOrders.length + 1).padStart(2, '0')}`,
+      referenceType: newPickForm.referenceType,
+      referenceNumber: newPickForm.referenceNumber,
+      targetCustomerOrBatch: newPickForm.targetCustomerOrBatch,
+      materialName: newPickForm.materialName,
+      requiredQtyKg: Number(newPickForm.requiredQtyKg),
+      allocatedBatch: 'LOT-NCP-2026-08',
+      sourceLocation: 'WH01-ZA-R01-S01-B01',
+      pickingStrategy: newPickForm.pickingStrategy,
+      status: 'pending',
+      expiryDate: '2028-06-14',
+    };
+
+    setPickingOrders([newPick, ...pickingOrders]);
+    setShowNewPickingModal(false);
+
+    try {
+      await fetch('/api/wms/picking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPickForm),
+      });
+    } catch (err) {
+      console.error('Failed to post wave picking:', err);
+    }
+  };
+
+  // Submit Transfer Movement
+  const handleCreateTransferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const newTrf: StockMovement = {
+      id: `TRF-${Date.now()}`,
+      transferNumber: `TRF-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(movements.length + 1).padStart(2, '0')}`,
+      movementType: newTrfForm.movementType,
+      materialName: newTrfForm.materialName,
+      batchLot: newTrfForm.batchLot,
+      qtyKg: Number(newTrfForm.qtyKg),
+      sourceLocation: newTrfForm.sourceLocation,
+      targetLocation: newTrfForm.targetLocation,
+      requestedBy: newTrfForm.requestedBy,
+      status: 'pending',
+      timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
+    };
+
+    setMovements([newTrf, ...movements]);
+    setShowNewTransferModal(false);
+
+    try {
+      await fetch('/api/wms/transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTrfForm),
+      });
+    } catch (err) {
+      console.error('Failed to post transfer:', err);
+    }
+  };
+
+  // Submit Stock Opname Record
+  const handleCreateOpnameSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const sys = Number(newOpnameForm.systemQtyKg);
+    const phys = Number(newOpnameForm.physicalQtyKg);
+    const discKg = phys - sys;
+    const discVal = discKg * 450000;
+
+    const newOpname: StockOpnameItem = {
+      id: `SO-${Date.now()}`,
+      opnameNumber: `SO-2026-Q3-${String(opnameList.length + 1).padStart(2, '0')}`,
+      binLocation: newOpnameForm.binLocation,
+      materialName: newOpnameForm.materialName,
+      batchLot: newOpnameForm.batchLot,
+      systemQtyKg: sys,
+      physicalQtyKg: phys,
+      discrepancyKg: discKg,
+      discrepancyValueIdr: discVal,
+      status: discKg === 0 ? 'matched' : 'discrepancy',
+      countedBy: newOpnameForm.countedBy,
+      countDate: new Date().toISOString().slice(0, 10),
+    };
+
+    setOpnameList([newOpname, ...opnameList]);
+    setShowNewOpnameModal(false);
+
+    try {
+      await fetch('/api/wms/stock-opname', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newOpnameForm),
+      });
+    } catch (err) {
+      console.error('Failed to post stock opname:', err);
+    }
+  };
+
+  // AI Chat Assistant Handler
+  const handleSendAiMessage = async (customPrompt?: string) => {
+    const textToSend = customPrompt || aiInput;
+    if (!textToSend.trim() || isAiLoading) return;
+
+    const userMsg = { role: 'user' as const, text: textToSend };
+    setAiMessages((prev) => [...prev, userMsg]);
+    if (!customPrompt) setAiInput('');
+    setIsAiLoading(true);
+
+    try {
+      const res = await fetch('/api/wms/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: textToSend }),
+      });
+      const data = await res.json();
+      if (data.success && data.reply) {
+        setAiMessages((prev) => [...prev, { role: 'assistant', text: data.reply }]);
+      }
+    } catch (err) {
+      console.error('Error sending AI message:', err);
+      setAiMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: 'Maaf, terjadi kendala saat merespons. Pastikan koneksi server WMS aktif.',
+        },
+      ]);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   return (
@@ -371,7 +697,7 @@ export const WmsExplorer: React.FC = () => {
                     Warehouse Management System (WMS) Enterprise
                   </h1>
                   <span className="rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-black px-2.5 py-0.5">
-                    Prompt 9 • CPKB Compliant
+                    Prompt 13 • CPKB Compliant
                   </span>
                 </div>
                 <p className="text-xs text-slate-300">
@@ -398,6 +724,14 @@ export const WmsExplorer: React.FC = () => {
             >
               <Plus className="h-4 w-4" />
               <span>Receiving GRN</span>
+            </button>
+
+            <button
+              onClick={() => setShowNewWarehouseModal(true)}
+              className="flex items-center space-x-1.5 rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold text-slate-200 border border-slate-700 hover:bg-slate-700 transition-all"
+            >
+              <Building2 className="h-4 w-4 text-indigo-400" />
+              <span>+ Gudang</span>
             </button>
 
             <button
@@ -449,7 +783,7 @@ export const WmsExplorer: React.FC = () => {
             <span>Receiving Hari Ini</span>
             <ArrowDownToLine className="h-3.5 w-3.5 text-emerald-400" />
           </div>
-          <p className="text-xl font-black font-mono text-emerald-300">14 GRN</p>
+          <p className="text-xl font-black font-mono text-emerald-300">{receipts.length} GRN</p>
           <p className="text-[10px] text-emerald-400 font-semibold">28.5 Ton Bahan Baku</p>
         </div>
 
@@ -458,7 +792,7 @@ export const WmsExplorer: React.FC = () => {
             <span>Picking & Dispatched</span>
             <ArrowUpFromLine className="h-3.5 w-3.5 text-cyan-400" />
           </div>
-          <p className="text-xl font-black font-mono text-cyan-300">18 Wave</p>
+          <p className="text-xl font-black font-mono text-cyan-300">{pickingOrders.length} Wave</p>
           <p className="text-[10px] text-cyan-400 font-semibold">100% FEFO Compliant</p>
         </div>
 
@@ -491,7 +825,12 @@ export const WmsExplorer: React.FC = () => {
       </div>
 
       {/* Navigation Sub-Tabs */}
-      <div className="border-b border-slate-800 flex items-center space-x-1 overflow-x-auto text-xs font-bold scrollbar-none pb-1">
+      <div
+        onWheel={(e) => {
+          if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY;
+        }}
+        className="border-b border-slate-800 flex items-center space-x-1 overflow-x-auto text-xs font-bold custom-scrollbar scroll-smooth touch-pan-x pb-1"
+      >
         <button
           onClick={() => setActiveSubTab('dashboard_map')}
           className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl transition-all whitespace-nowrap ${
@@ -790,7 +1129,14 @@ export const WmsExplorer: React.FC = () => {
               <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
                 <span>📍 Klik slot bin untuk melihat detail isi & cetak QR barcode label</span>
                 <button
-                  onClick={() => setActiveSubTab('audit_barcodes')}
+                  onClick={() => {
+                    setLabelToPrint({
+                      type: 'Bin Location',
+                      title: selectedBin.barcode,
+                      code: selectedBin.barcode,
+                    });
+                    setShowPrintLabelModal(true);
+                  }}
                   className="text-amber-400 font-bold hover:underline flex items-center gap-1"
                 >
                   <Printer className="h-3.5 w-3.5" />
@@ -878,19 +1224,23 @@ export const WmsExplorer: React.FC = () => {
                     <Bot className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
                     <div>
                       <span className="font-bold text-indigo-300">Rekomendasi Lokasi AI Put-Away:</span>
-                      <p className="font-mono font-bold text-white">{gr.suggestedLocation}</p>
+                      <p className="font-mono font-bold text-white">{gr.assignedLocation || gr.suggestedLocation}</p>
                       <p className="text-[10px] text-slate-400">Alasan AI: FEFO Priority + Kontrol Suhu Terjaga + Kapasitas Bin Tersedia 85%</p>
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      alert(`Lokasi Put-Away dikonfirmasi: ${gr.suggestedLocation}`);
-                    }}
-                    className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 whitespace-nowrap text-xs shadow"
-                  >
-                    Konfirmasi Put-Away →
-                  </button>
+                  {!gr.assignedLocation ? (
+                    <button
+                      onClick={() => handleConfirmPutaway(gr.id, gr.suggestedLocation)}
+                      className="rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 whitespace-nowrap text-xs shadow"
+                    >
+                      Konfirmasi Put-Away →
+                    </button>
+                  ) : (
+                    <span className="text-emerald-400 font-bold flex items-center gap-1 text-xs">
+                      <CheckCircle2 className="h-4 w-4" /> Allocated
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -909,9 +1259,13 @@ export const WmsExplorer: React.FC = () => {
                   <h2 className="text-sm font-bold text-white">Picking Orders & Wave Dispatch</h2>
                   <p className="text-xs text-slate-400">Strategi Picking FEFO / Wave untuk Produksi MES & Shipment Maklon</p>
                 </div>
-                <span className="text-[10px] font-mono bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30 font-bold">
-                  2 Picking Task Active
-                </span>
+                <button
+                  onClick={() => setShowNewPickingModal(true)}
+                  className="flex items-center space-x-1.5 rounded-xl bg-cyan-500/20 px-3 py-1.5 text-xs font-bold text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 transition-all"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>+ Wave Picking</span>
+                </button>
               </div>
 
               <div className="space-y-3">
@@ -1018,7 +1372,7 @@ export const WmsExplorer: React.FC = () => {
               <p className="text-xs text-slate-400">Pindahan Gudang Bahan Baku ke Cleanroom Dispensing MES dengan Otorisasi Supervisor</p>
             </div>
             <button
-              onClick={() => alert('Form Transfer Lokasi Baru dibuka.')}
+              onClick={() => setShowNewTransferModal(true)}
               className="flex items-center space-x-2 rounded-xl bg-amber-500/20 px-3.5 py-2 text-xs font-bold text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all"
             >
               <Plus className="h-4 w-4" />
@@ -1082,9 +1436,18 @@ export const WmsExplorer: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Stock Opname Execution Box */}
             <div className="rounded-2xl bg-slate-950 border border-slate-800 p-5 space-y-4">
-              <div className="flex items-center space-x-2 border-b border-slate-800 pb-3">
-                <ClipboardCheck className="h-4 w-4 text-purple-400" />
-                <h2 className="text-sm font-bold text-white">Stock Opname & Cycle Counting</h2>
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center space-x-2">
+                  <ClipboardCheck className="h-4 w-4 text-purple-400" />
+                  <h2 className="text-sm font-bold text-white">Stock Opname & Cycle Counting</h2>
+                </div>
+                <button
+                  onClick={() => setShowNewOpnameModal(true)}
+                  className="flex items-center space-x-1 rounded bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold px-2.5 py-1"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Input Hasil Opname</span>
+                </button>
               </div>
 
               <div className="space-y-3 text-xs">
@@ -1107,12 +1470,36 @@ export const WmsExplorer: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => alert('Lembar Kerja Cycle Count diterbitkan ke Scanner Operator.')}
-                  className="w-full rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 text-xs shadow"
-                >
-                  Mulai Cycle Count Sekarang →
-                </button>
+                {/* Opname Discrepancy Table */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Hasil Count Terbaru:</span>
+                  <div className="rounded-xl border border-slate-800 overflow-hidden">
+                    <table className="w-full text-left text-[11px] font-mono">
+                      <thead className="bg-slate-900 text-slate-400 border-b border-slate-800">
+                        <tr>
+                          <th className="p-2">Lokasi Bin</th>
+                          <th className="p-2">Material</th>
+                          <th className="p-2">Sistem</th>
+                          <th className="p-2">Fisik</th>
+                          <th className="p-2">Selisih</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800">
+                        {opnameList.map((item) => (
+                          <tr key={item.id} className="hover:bg-slate-900/50">
+                            <td className="p-2 text-indigo-300 font-bold">{item.binLocation}</td>
+                            <td className="p-2 text-white">{item.materialName}</td>
+                            <td className="p-2 text-slate-300">{item.systemQtyKg} Kg</td>
+                            <td className="p-2 font-bold text-emerald-300">{item.physicalQtyKg} Kg</td>
+                            <td className={`p-2 font-bold ${item.discrepancyKg < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                              {item.discrepancyKg > 0 ? `+${item.discrepancyKg}` : item.discrepancyKg} Kg
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1132,13 +1519,13 @@ export const WmsExplorer: React.FC = () => {
                   <div className="pt-2 flex items-center gap-2">
                     <button
                       onClick={() => alert('Stok dirilis ke status AVAILABLE!')}
-                      className="flex-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/40 py-1 font-bold text-[11px]"
+                      className="flex-1 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 py-1 font-bold text-[11px]"
                     >
                       Release to Available
                     </button>
                     <button
                       onClick={() => alert('Stok dipindahkan ke REJECTED / SCRAP!')}
-                      className="flex-1 rounded bg-rose-950 text-rose-300 border border-rose-500/40 py-1 font-bold text-[11px]"
+                      className="flex-1 rounded bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-500/40 py-1 font-bold text-[11px]"
                     >
                       Reject & Scrap
                     </button>
@@ -1157,36 +1544,102 @@ export const WmsExplorer: React.FC = () => {
             <div className="flex items-center space-x-3">
               <Bot className="h-6 w-6 text-amber-400" />
               <div>
-                <h2 className="text-base font-bold text-white">AI Autonomous Warehouse Assistant (Gemini 3.6 Flash)</h2>
+                <h2 className="text-base font-bold text-white">AI Autonomous Warehouse Assistant (Gemini Copilot)</h2>
                 <p className="text-xs text-slate-300">Rekomendasi Tata Letak Gudang, Analisis Slow-Moving, & Prediksi Kapasitas Bin</p>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-              <div className="flex items-center space-x-2 text-emerald-400 font-bold text-xs">
-                <Sparkles className="h-4 w-4" />
-                <span>Optimasi Rute Picking & Layout Gudang</span>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Quick Prompt Chips & Insights */}
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                <span className="text-xs font-bold text-amber-300 uppercase block">Quick Action Prompts:</span>
+                <div className="space-y-2 text-xs">
+                  <button
+                    onClick={() => handleSendAiMessage('Rekomendasi Put-Away Cold Storage untuk Squalane dan Active Peptide')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 transition-all"
+                  >
+                    💡 Rekomendasi Put-Away Cold Storage
+                  </button>
+                  <button
+                    onClick={() => handleSendAiMessage('Analisis risiko expired FEFO dan bahan baku slow-moving')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 transition-all"
+                  >
+                    ⚠️ Deteksi Expiry Risk FEFO
+                  </button>
+                  <button
+                    onClick={() => handleSendAiMessage('Bagaimana optimasi rute picking untuk produksi batch minggu ini?')}
+                    className="w-full text-left p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 transition-all"
+                  >
+                    🚚 Optimasi Wave Picking MES
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-slate-300">
-                AI mendeteksi Niacinamide & Glycerin memiliki frekuensi picking tertinggi (34 kali/minggu).
-              </p>
-              <div className="p-3 rounded-xl bg-slate-900 text-xs text-amber-300 font-mono">
-                💡 Rekomendasi AI: Pindahkan Niacinamide dari Rack R-04 ke Rack R-01 (dekat pintu dispensing) untuk menghemat 140 meter jalan operator per shift.
+
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 text-xs">
+                <span className="font-bold text-white block">Status Ringkas Sensor Cold Room:</span>
+                <div className="p-3 rounded-xl bg-slate-900 border border-blue-500/30 space-y-1 font-mono">
+                  <p className="text-blue-300 font-bold">WH-COLD-02 Cold Room 1</p>
+                  <p className="text-slate-300">Suhu: <span className="text-emerald-400 font-bold">4.2°C</span> (Batas: 2-8°C)</p>
+                  <p className="text-slate-300">Kelembaban: <span className="text-emerald-400 font-bold">45% RH</span></p>
+                  <p className="text-[10px] text-slate-400">Status Sensor: Operational (Live IoT Sync)</p>
+                </div>
               </div>
             </div>
 
-            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-              <div className="flex items-center space-x-2 text-rose-400 font-bold text-xs">
-                <AlertTriangle className="h-4 w-4" />
-                <span>Deteksi Dead Stock & Risiko Expired FEFO</span>
+            {/* Live Interactive Chat Area */}
+            <div className="lg:col-span-2 rounded-2xl bg-slate-950 border border-slate-800 p-5 flex flex-col justify-between h-[520px]">
+              <div className="overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                {aiMessages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-start space-x-3 text-xs ${
+                      msg.role === 'user' ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    {msg.role === 'assistant' && (
+                      <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 shrink-0">
+                        <Bot className="h-4 w-4" />
+                      </div>
+                    )}
+                    <div
+                      className={`p-3.5 rounded-2xl max-w-[85%] whitespace-pre-line leading-relaxed ${
+                        msg.role === 'user'
+                          ? 'bg-indigo-600 text-white font-medium rounded-tr-none'
+                          : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                {isAiLoading && (
+                  <div className="flex items-center space-x-2 text-xs text-amber-400 font-mono animate-pulse">
+                    <Bot className="h-4 w-4" />
+                    <span>Gemini AI sedang menganalisis data gudang WMS...</span>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-slate-300">
-                2 Lot Bahan Baku Tidak Ada Pergerakan selama &gt; 90 Hari.
-              </p>
-              <div className="p-3 rounded-xl bg-slate-900 text-xs text-rose-300 font-mono">
-                ⚠️ Warning AI: Lot-EXT-004 (Peptide Complex) senilai Rp 45.000.000 akan expired dalam 42 hari. Segera alokasikan ke batch R&D atau tawarkan ke tim Maklon.
+
+              {/* Chat Input Bar */}
+              <div className="pt-4 border-t border-slate-800 flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendAiMessage()}
+                  placeholder="Tanyakan rekomendasi slotting, Put-Away, FEFO, atau Stock Opname..."
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+                <button
+                  onClick={() => handleSendAiMessage()}
+                  disabled={isAiLoading}
+                  className="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 text-xs flex items-center space-x-1 shadow transition-all disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                  <span>Kirim</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1203,7 +1656,15 @@ export const WmsExplorer: React.FC = () => {
                 <h2 className="text-sm font-bold text-white">Generator & Cetak Barcode / QR Label Standard CPKB</h2>
               </div>
               <button
-                onClick={() => alert('Mencetak seluruh label barcode terpilh ke Thermal Printer Zebra...')}
+                onClick={() => {
+                  setLabelToPrint({
+                    type: 'Batch Pallet Label',
+                    title: 'PLT-2026-0042',
+                    code: 'PLT-2026-0042',
+                    lot: 'LOT-NCP-2026-08',
+                  });
+                  setShowPrintLabelModal(true);
+                }}
                 className="rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 px-3 py-1.5 text-xs font-bold flex items-center gap-1"
               >
                 <Printer className="h-3.5 w-3.5" />
@@ -1219,6 +1680,19 @@ export const WmsExplorer: React.FC = () => {
                   <span className="text-[10px] font-mono font-black text-slate-950 block pt-1">LOC-W1-ZA-R04-B18</span>
                 </div>
                 <p className="text-[10px] text-slate-400">Format QR Code 2D High-Density</p>
+                <button
+                  onClick={() => {
+                    setLabelToPrint({
+                      type: 'Lokasi Bin',
+                      title: 'Bin WH01-ZA-R04-S02-B18',
+                      code: 'LOC-W1-ZA-R04-S02-B18',
+                    });
+                    setShowPrintLabelModal(true);
+                  }}
+                  className="mt-2 text-[11px] font-bold text-indigo-400 hover:underline"
+                >
+                  Pratinjau & Cetak →
+                </button>
               </div>
 
               <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
@@ -1230,6 +1704,20 @@ export const WmsExplorer: React.FC = () => {
                   <span className="text-[10px] font-mono font-black text-slate-950 block pt-1">LOT-NCP-2026-08</span>
                 </div>
                 <p className="text-[10px] text-slate-400">Format Code 128 Standard</p>
+                <button
+                  onClick={() => {
+                    setLabelToPrint({
+                      type: 'Lot Raw Material',
+                      title: 'Niacinamide USP Grade 99.5%',
+                      code: 'LOT-NCP-2026-08',
+                      lot: 'LOT-NCP-2026-08',
+                    });
+                    setShowPrintLabelModal(true);
+                  }}
+                  className="mt-2 text-[11px] font-bold text-emerald-400 hover:underline"
+                >
+                  Pratinjau & Cetak →
+                </button>
               </div>
 
               <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
@@ -1239,6 +1727,19 @@ export const WmsExplorer: React.FC = () => {
                   <span className="text-[10px] font-mono font-black text-slate-950 block pt-1">PLT-2026-0042</span>
                 </div>
                 <p className="text-[10px] text-slate-400">Format GS1 Pallet Label</p>
+                <button
+                  onClick={() => {
+                    setLabelToPrint({
+                      type: 'Pallet Tag GS1',
+                      title: 'Pallet PLT-2026-0042',
+                      code: 'PLT-2026-0042',
+                    });
+                    setShowPrintLabelModal(true);
+                  }}
+                  className="mt-2 text-[11px] font-bold text-cyan-400 hover:underline"
+                >
+                  Pratinjau & Cetak →
+                </button>
               </div>
             </div>
           </div>
@@ -1307,13 +1808,39 @@ export const WmsExplorer: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <form onSubmit={handleCreateReceivingSubmit} className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-400 font-bold mb-1">Pilih Ref PO Purchase Order:</label>
-                <select className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono">
-                  <option>PO-2026-0910 — Mibelle Biochemistry (Apple Stemcell 25kg)</option>
-                  <option>PO-2026-0911 — Seppic France (Emulsifier Montanov 68 200kg)</option>
-                </select>
+                <input
+                  type="text"
+                  value={newGrnForm.poReference}
+                  onChange={(e) => setNewGrnForm({ ...newGrnForm, poReference: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Nama Supplier:</label>
+                  <input
+                    type="text"
+                    value={newGrnForm.supplierName}
+                    onChange={(e) => setNewGrnForm({ ...newGrnForm, supplierName: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Nama Material:</label>
+                  <input
+                    type="text"
+                    value={newGrnForm.materialName}
+                    onChange={(e) => setNewGrnForm({ ...newGrnForm, materialName: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1321,33 +1848,381 @@ export const WmsExplorer: React.FC = () => {
                   <label className="block text-slate-400 font-bold mb-1">Kuantitas Diterima (Kg):</label>
                   <input
                     type="number"
-                    defaultValue={25}
+                    value={newGrnForm.receivedQtyKg}
+                    onChange={(e) => setNewGrnForm({ ...newGrnForm, receivedQtyKg: Number(e.target.value) })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
                   />
                 </div>
                 <div>
                   <label className="block text-slate-400 font-bold mb-1">Batch Supplier:</label>
                   <input
                     type="text"
-                    defaultValue="SUP-MIB-9901"
+                    value={newGrnForm.batchSupplier}
+                    onChange={(e) => setNewGrnForm({ ...newGrnForm, batchSupplier: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
                   />
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-950 border border-indigo-500/30 text-[11px] space-y-1">
-                <span className="font-bold text-indigo-300 block">🤖 Lokasi Put-Away Ditentukan Oleh AI:</span>
-                <p className="font-mono text-white">WH-COLD-02 / Cold Zone C1 / Rack R-02 / Bin B-05</p>
-                <p className="text-slate-400">Bahan sensitif dingin (2-8°C) dialokasikan otomatis ke Cold Room.</p>
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Kondisi Penyimpanan:</label>
+                <select
+                  value={newGrnForm.storageCondition}
+                  onChange={(e) => setNewGrnForm({ ...newGrnForm, storageCondition: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                >
+                  <option value="Room Temp (20-25°C)">Room Temp (20-25°C)</option>
+                  <option value="Cold Room (2-8°C)">Cold Room (2-8°C)</option>
+                  <option value="Controlled Cleanroom">Controlled Cleanroom</option>
+                </select>
               </div>
 
               <button
-                onClick={handleCreateReceiving}
-                className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-xs font-black text-slate-950 hover:brightness-110 shadow"
+                type="submit"
+                className="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-xs font-black text-slate-950 hover:brightness-110 shadow mt-2"
               >
                 Simpan & Recheck QC Hold →
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD NEW WAREHOUSE */}
+      {showNewWarehouseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-indigo-500/40 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Building2 className="h-5 w-5 text-indigo-400" />
+                <h3 className="text-sm font-bold text-white">Tambah Gudang Baru</h3>
+              </div>
+              <button onClick={() => setShowNewWarehouseModal(false)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
             </div>
+
+            <form onSubmit={handleCreateWarehouseSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Kode Gudang:</label>
+                <input
+                  type="text"
+                  value={newWhForm.code}
+                  onChange={(e) => setNewWhForm({ ...newWhForm, code: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Nama Gudang:</label>
+                <input
+                  type="text"
+                  value={newWhForm.name}
+                  onChange={(e) => setNewWhForm({ ...newWhForm, name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Kondisi Suhu:</label>
+                <select
+                  value={newWhForm.temperatureType}
+                  onChange={(e) => setNewWhForm({ ...newWhForm, temperatureType: e.target.value as any })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white"
+                >
+                  <option value="Room Temp (20-25°C)">Room Temp (20-25°C)</option>
+                  <option value="Cold Room (2-8°C)">Cold Room (2-8°C)</option>
+                  <option value="Controlled Cleanroom">Controlled Cleanroom</option>
+                  <option value="Hazardous Flammable">Hazardous Flammable</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Total Kapasitas Bins:</label>
+                <input
+                  type="number"
+                  value={newWhForm.capacityBins}
+                  onChange={(e) => setNewWhForm({ ...newWhForm, capacityBins: Number(e.target.value) })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 text-xs shadow mt-2"
+              >
+                Simpan Gudang Baru →
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NEW WAVE PICKING */}
+      {showNewPickingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-cyan-500/40 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Truck className="h-5 w-5 text-cyan-400" />
+                <h3 className="text-sm font-bold text-white">Buat Order Wave Picking Baru</h3>
+              </div>
+              <button onClick={() => setShowNewPickingModal(false)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePickingSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Referensi / Work Order Ref:</label>
+                <input
+                  type="text"
+                  value={newPickForm.referenceNumber}
+                  onChange={(e) => setNewPickForm({ ...newPickForm, referenceNumber: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Nama Material / Product:</label>
+                <input
+                  type="text"
+                  value={newPickForm.materialName}
+                  onChange={(e) => setNewPickForm({ ...newPickForm, materialName: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Qty Dibutuhkan (Kg):</label>
+                  <input
+                    type="number"
+                    value={newPickForm.requiredQtyKg}
+                    onChange={(e) => setNewPickForm({ ...newPickForm, requiredQtyKg: Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Strategi Picking:</label>
+                  <select
+                    value={newPickForm.pickingStrategy}
+                    onChange={(e) => setNewPickForm({ ...newPickForm, pickingStrategy: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                  >
+                    <option value="FEFO">FEFO (First Expired First Out)</option>
+                    <option value="FIFO">FIFO (First In First Out)</option>
+                    <option value="Wave">Wave Batching</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black py-2.5 text-xs shadow mt-2"
+              >
+                Terbitkan Wave Picking →
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NEW TRANSFER MOVEMENT */}
+      {showNewTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-amber-500/40 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <ArrowLeftRight className="h-5 w-5 text-amber-400" />
+                <h3 className="text-sm font-bold text-white">Buat Transfer Stok Baru</h3>
+              </div>
+              <button onClick={() => setShowNewTransferModal(false)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTransferSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Nama Material:</label>
+                <input
+                  type="text"
+                  value={newTrfForm.materialName}
+                  onChange={(e) => setNewTrfForm({ ...newTrfForm, materialName: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Lot Internal:</label>
+                  <input
+                    type="text"
+                    value={newTrfForm.batchLot}
+                    onChange={(e) => setNewTrfForm({ ...newTrfForm, batchLot: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Jumlah (Kg):</label>
+                  <input
+                    type="number"
+                    value={newTrfForm.qtyKg}
+                    onChange={(e) => setNewTrfForm({ ...newTrfForm, qtyKg: Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Lokasi Asal:</label>
+                  <input
+                    type="text"
+                    value={newTrfForm.sourceLocation}
+                    onChange={(e) => setNewTrfForm({ ...newTrfForm, sourceLocation: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Lokasi Tujuan:</label>
+                  <input
+                    type="text"
+                    value={newTrfForm.targetLocation}
+                    onChange={(e) => setNewTrfForm({ ...newTrfForm, targetLocation: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 text-xs shadow mt-2"
+              >
+                Kirim Perintah Transfer →
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NEW STOCK OPNAME RECORD */}
+      {showNewOpnameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-purple-500/40 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <ClipboardCheck className="h-5 w-5 text-purple-400" />
+                <h3 className="text-sm font-bold text-white">Input Hasil Count Stock Opname</h3>
+              </div>
+              <button onClick={() => setShowNewOpnameModal(false)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateOpnameSubmit} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Kode Lokasi Bin:</label>
+                <input
+                  type="text"
+                  value={newOpnameForm.binLocation}
+                  onChange={(e) => setNewOpnameForm({ ...newOpnameForm, binLocation: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Nama Material / Item:</label>
+                <input
+                  type="text"
+                  value={newOpnameForm.materialName}
+                  onChange={(e) => setNewOpnameForm({ ...newOpnameForm, materialName: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Qty Sistem (Kg):</label>
+                  <input
+                    type="number"
+                    value={newOpnameForm.systemQtyKg}
+                    onChange={(e) => setNewOpnameForm({ ...newOpnameForm, systemQtyKg: Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-bold mb-1">Qty Hasil Fisik (Kg):</label>
+                  <input
+                    type="number"
+                    value={newOpnameForm.physicalQtyKg}
+                    onChange={(e) => setNewOpnameForm({ ...newOpnameForm, physicalQtyKg: Number(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-mono"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold py-2.5 text-xs shadow mt-2"
+              >
+                Simpan & Hiraukan Audit Trail →
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PRINT BARCODE / QR CODE LABEL STUDIO */}
+      {showPrintLabelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-amber-400/50 p-6 space-y-5 shadow-2xl text-center">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Printer className="h-5 w-5 text-amber-400" />
+                <h3 className="text-sm font-bold text-white">Pratinjau Label {labelToPrint.type}</h3>
+              </div>
+              <button onClick={() => setShowPrintLabelModal(false)} className="text-slate-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Simulated Printed Label */}
+            <div className="bg-white p-5 rounded-xl text-slate-950 space-y-2 font-mono shadow-inner border-2 border-slate-300">
+              <span className="text-[10px] font-bold text-slate-500 uppercase block tracking-wider">
+                PT PARAGONIA COSMETIC INDUSTRI - WMS
+              </span>
+              <h4 className="font-extrabold text-sm line-clamp-1">{labelToPrint.title}</h4>
+              {labelToPrint.lot && <p className="text-xs font-bold text-slate-700">LOT: {labelToPrint.lot}</p>}
+
+              <div className="my-3 py-2 bg-slate-950 text-white rounded-lg flex items-center justify-center">
+                <QrCode className="h-20 w-20 text-white" />
+              </div>
+
+              <span className="text-xs font-black tracking-widest block bg-slate-100 py-1 rounded">
+                {labelToPrint.code}
+              </span>
+              <span className="text-[9px] text-slate-500 block">STANDARD CPKB / BPOM FEFO TRACEABILITY</span>
+            </div>
+
+            <button
+              onClick={() => {
+                alert(`✓ Perintah Cetak Label ${labelToPrint.code} berhasil dikirim ke Zebra Thermal Printer!`);
+                setShowPrintLabelModal(false);
+              }}
+              className="w-full rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-black py-2.5 text-xs shadow hover:brightness-110 flex items-center justify-center gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              <span>Cetak Ke Zebra Thermal Printer</span>
+            </button>
           </div>
         </div>
       )}

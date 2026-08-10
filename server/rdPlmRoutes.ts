@@ -11,6 +11,9 @@ import {
   initialEcrEcoItems,
   initialRdDocuments,
   initialProductCostings,
+  initialStabilityProtocols,
+  initialInciSafetyItems,
+  initialSensoryClinicalPanels,
   RdIdea,
   RdProject,
   FormulaExperiment,
@@ -22,6 +25,9 @@ import {
   EcrEcoItem,
   RdDocument,
   ProductCostingItem,
+  StabilityProtocol,
+  InciSafetyItem,
+  SensoryClinicalPanel,
 } from './rdPlmData.js';
 
 export const rdPlmRouter = Router();
@@ -38,6 +44,9 @@ let competitorsStore = [...initialCompetitorItems];
 let ecrEcoStore = [...initialEcrEcoItems];
 let documentsStore = [...initialRdDocuments];
 let productCostingsStore = [...initialProductCostings];
+let stabilityStore = [...initialStabilityProtocols];
+let inciSafetyStore = [...initialInciSafetyItems];
+let sensoryClinicalStore = [...initialSensoryClinicalPanels];
 
 let auditLogs: Array<{ id: string; timestamp: string; user: string; action: string; module: string; details: string }> = [
   {
@@ -430,6 +439,78 @@ rdPlmRouter.post('/ecr', (req: Request, res: Response) => {
 // 11. /api/rd-documents
 rdPlmRouter.get('/rd-documents', (req: Request, res: Response) => {
   res.json({ documents: documentsStore, count: documentsStore.length });
+});
+
+// 12. /api/stability-protocols - Stability Testing & Chamber Log
+rdPlmRouter.get('/stability-protocols', (req: Request, res: Response) => {
+  res.json({ stabilityProtocols: stabilityStore, count: stabilityStore.length });
+});
+
+rdPlmRouter.post('/stability-protocols', (req: Request, res: Response) => {
+  const newStab: StabilityProtocol = {
+    id: `stab-${Date.now()}`,
+    stabilityCode: `STB-2026-${String(stabilityStore.length + 1).padStart(3, '0')}`,
+    formulaCode: req.body.formulaCode || 'EXP-FORM-V1',
+    productName: req.body.productName || 'New Product Formulation',
+    testCondition: req.body.testCondition || 'Accelerated (40°C / 75% RH)',
+    chamberUnit: req.body.chamberUnit || 'Chamber Unit A-01',
+    durationMonths: req.body.durationMonths || 6,
+    currentInterval: 'Day 0',
+    phDrift: req.body.phDrift || 'Initial pH Logged',
+    viscosityChange: req.body.viscosityChange || 'Initial Viscosity Logged',
+    organolepticCheck: 'Normal (No Change)',
+    microbiologyCheck: 'Passed (Zero Growth)',
+    status: 'Ongoing Testing',
+    lastTestedDate: new Date().toISOString().split('T')[0],
+  };
+  stabilityStore.unshift(newStab);
+  res.status(201).json({ message: 'Stability Protocol Logged', stabilityProtocol: newStab });
+});
+
+// 13. /api/inci-safety - INCI Safety & BPOM Regulatory Checker
+rdPlmRouter.get('/inci-safety', (req: Request, res: Response) => {
+  res.json({ inciItems: inciSafetyStore, count: inciSafetyStore.length });
+});
+
+rdPlmRouter.post('/inci-safety', (req: Request, res: Response) => {
+  const newItem: InciSafetyItem = {
+    id: `inci-${Date.now()}`,
+    inciName: req.body.inciName || 'Unknown INCI',
+    tradeName: req.body.tradeName || 'Raw Material Trade Name',
+    casNumber: req.body.casNumber || '00-00-0',
+    bpomStatus: req.body.bpomStatus || 'Permitted',
+    maxAllowedPercent: req.body.maxAllowedPercent || 100,
+    echaReachStatus: 'Registered',
+    halalCertified: req.body.halalCertified ?? true,
+    allergenWarning: req.body.allergenWarning || 'None',
+    functionCategory: req.body.functionCategory || 'Active Ingredient',
+  };
+  inciSafetyStore.unshift(newItem);
+  res.status(201).json({ message: 'INCI Safety Item Added', item: newItem });
+});
+
+// 14. /api/sensory-clinical - Sensory & Dermatological Panel Testing
+rdPlmRouter.get('/sensory-clinical', (req: Request, res: Response) => {
+  res.json({ panels: sensoryClinicalStore, count: sensoryClinicalStore.length });
+});
+
+rdPlmRouter.post('/sensory-clinical', (req: Request, res: Response) => {
+  const newPanel: SensoryClinicalPanel = {
+    id: `sens-${Date.now()}`,
+    panelCode: `PNL-2026-${String(sensoryClinicalStore.length + 14).padStart(3, '0')}`,
+    formulaCode: req.body.formulaCode || 'EXP-FORM-V1',
+    productName: req.body.productName || 'New Product Formulation',
+    panelSizeCount: req.body.panelSizeCount || 20,
+    textureScore: req.body.textureScore || 4.5,
+    absorptionScore: req.body.absorptionScore || 4.5,
+    nonGreasinessScore: req.body.nonGreasinessScore || 4.5,
+    fragranceScore: req.body.fragranceScore || 4.5,
+    overallSatisfactionPercent: req.body.overallSatisfactionPercent || 90,
+    hriptClinicalResult: 'Passed (Hypoallergenic 0/50 Reaction)',
+    dermatologistApproved: true,
+  };
+  sensoryClinicalStore.unshift(newPanel);
+  res.status(201).json({ message: 'Sensory Panel Evaluation Logged', panel: newPanel });
 });
 
 // 12. /api/ai-rd-assistant - Formula Optimizer & Predictions

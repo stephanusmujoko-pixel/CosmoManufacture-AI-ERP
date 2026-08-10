@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Factory,
   Calendar,
@@ -157,11 +157,60 @@ export const PpicMrpExplorer: React.FC = () => {
   const [lineFilter, setLineFilter] = useState('All');
   const [showMrpModal, setShowMrpModal] = useState(false);
   const [showNewMpsModal, setShowNewMpsModal] = useState(false);
+  const [showNewDemandModal, setShowNewDemandModal] = useState(false);
+  const [showNewScheduleModal, setShowNewScheduleModal] = useState(false);
+  const [showPrintSlipModal, setShowPrintSlipModal] = useState(false);
+  const [selectedSlipTask, setSelectedSlipTask] = useState<ProductionScheduleTask | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [selectedScenario, setSelectedScenario] = useState<string>('Normal Operational Horizon');
+  const [prSentSuccess, setPrSentSuccess] = useState(false);
+
+  // AI Assistant Chat State
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiChatHistory, setAiChatHistory] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
+    {
+      role: 'assistant',
+      text: 'Salam PPIC Planner! Saya Copilot AI PPIC Pabrik CosmoManufacture. Saya siap membantu kalkulasi MRP, penyeimbangan beban vessel emulsifier (Line Balancing), serta mitigasi risiko lead-time supplier.',
+    },
+  ]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+  // New Demand Forecast Form State
+  const [newDemandData, setNewDemandData] = useState({
+    productCode: 'FG-NEW-005',
+    productName: '',
+    category: 'Facial Care',
+    salesOrderQty: 10000,
+    forecastQty: 5000,
+    safetyStockTarget: 3000,
+    period: 'Aug 2026',
+  });
+
+  // New MPS Entry Form State
+  const [newMpsData, setNewMpsData] = useState({
+    productCode: 'FG-SRM-001',
+    productName: 'CosmoGlow Intense Brightening Serum 30ml',
+    plannedQtyPcs: 20000,
+    productionLine: 'Line A (Serum & Liquid)' as 'Line A (Serum & Liquid)' | 'Line B (Cream & Emulsion)' | 'Line C (Tube Packaging)',
+    assignedMachine: 'Vacuum Emulsifier Tank 1000L (Vessel-01)',
+    startDate: '2026-08-15',
+    endDate: '2026-08-19',
+    priority: 'Normal' as 'High (Rush Order)' | 'Normal' | 'Low',
+  });
+
+  // New Schedule Task Form State
+  const [newScheduleData, setNewScheduleData] = useState({
+    productName: 'CosmoGlow Intense Brightening Serum 30ml',
+    batchQtyKg: 600,
+    targetUnits: 20000,
+    machineName: 'Vacuum Emulsifier Tank 1000L (Vessel-01)',
+    scheduledStart: '2026-08-12 08:00',
+    scheduledEnd: '2026-08-14 16:00',
+    assignedOperator: 'Operator Tim Cleanroom A',
+  });
 
   // Mock Demand Forecast Data
-  const [demandForecasts] = useState<DemandForecastItem[]>([
+  const [demandForecasts, setDemandForecasts] = useState<DemandForecastItem[]>([
     {
       id: 'FCT-001',
       productCode: 'FG-SRM-001',
@@ -284,7 +333,7 @@ export const PpicMrpExplorer: React.FC = () => {
   ]);
 
   // Mock MRP Results
-  const [mrpResults] = useState<MrpResultItem[]>([
+  const [mrpResults, setMrpResults] = useState<MrpResultItem[]>([
     {
       id: 'MRP-001',
       materialCode: 'RM-ACT-001',
@@ -364,7 +413,7 @@ export const PpicMrpExplorer: React.FC = () => {
   ]);
 
   // Mock CRP Capacity Data
-  const [crpCapacities] = useState<CrpCapacityItem[]>([
+  const [crpCapacities, setCrpCapacities] = useState<CrpCapacityItem[]>([
     {
       id: 'CRP-001',
       machineCode: 'EQ-VESSEL-01',
@@ -407,7 +456,7 @@ export const PpicMrpExplorer: React.FC = () => {
   ]);
 
   // Mock Production Schedule Tasks
-  const [scheduleTasks] = useState<ProductionScheduleTask[]>([
+  const [scheduleTasks, setScheduleTasks] = useState<ProductionScheduleTask[]>([
     {
       id: 'SCH-001',
       moNumber: 'MO-20260810-001',
@@ -437,6 +486,320 @@ export const PpicMrpExplorer: React.FC = () => {
       status: 'Scheduled',
     },
   ]);
+
+  // Fetch initial PPIC data from API backend on mount
+  useEffect(() => {
+    // 1. Demand Forecasts
+    fetch('/api/ppic/demand-forecasts')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setDemandForecasts(data.data);
+        }
+      })
+      .catch((err) => console.error('Error fetching demand forecasts:', err));
+
+    // 2. MPS List
+    fetch('/api/ppic/mps')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setMpsList(data.data);
+        }
+      })
+      .catch((err) => console.error('Error fetching MPS list:', err));
+
+    // 3. MRP Results
+    fetch('/api/ppic/mrp-results')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setMrpResults(data.data);
+        }
+      })
+      .catch((err) => console.error('Error fetching MRP results:', err));
+
+    // 4. CRP Capacities
+    fetch('/api/ppic/crp')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setCrpCapacities(data.data);
+        }
+      })
+      .catch((err) => console.error('Error fetching CRP capacities:', err));
+
+    // 5. Production Schedules
+    fetch('/api/ppic/schedules')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          const mapped = data.data.map((item: any) => ({
+            id: item.id,
+            moNumber: item.moNumber,
+            productName: item.productName,
+            batchQtyKg: item.batchQtyKg,
+            targetUnits: item.targetUnits || item.targetPcs || 15000,
+            machineName: item.machineName || item.machineVessel || 'Vacuum Emulsifier Tank 1000L (Vessel-01)',
+            scheduledStart: item.scheduledStart || item.scheduledStartTime || '2026-08-10 08:00',
+            scheduledEnd: item.scheduledEnd || item.scheduledEndTime || '2026-08-12 16:00',
+            schedulingMode: 'Finite Capacity (Forward)' as const,
+            materialStatus: item.fefoMaterialReady ? '100% Reserved (FEFO Ready)' : 'Partial Allocation',
+            qcHoldCheck: item.qcApprovalStatus === 'Passed' ? 'QC Passed' : 'QC Hold',
+            status: item.status || 'Scheduled',
+          }));
+          setScheduleTasks(mapped);
+        }
+      })
+      .catch((err) => console.error('Error fetching schedules:', err));
+  }, []);
+
+  // Handlers for PPIC Features
+  const handleAddDemandForecast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const so = Number(newDemandData.salesOrderQty || 0);
+    const fc = Number(newDemandData.forecastQty || 0);
+    const tot = so + fc;
+    const safety = Number(newDemandData.safetyStockTarget || 3000);
+    const curStock = 2000;
+    const net = Math.max(0, tot + safety - curStock);
+
+    const newItem: DemandForecastItem = {
+      id: `FCT-${Date.now()}`,
+      productCode: newDemandData.productCode,
+      productName: newDemandData.productName,
+      category: newDemandData.category,
+      salesOrderQty: so,
+      forecastQty: fc,
+      totalDemandQty: tot,
+      uom: 'Pcs',
+      safetyStockTarget: safety,
+      currentStock: curStock,
+      netDemandQty: net,
+      period: newDemandData.period,
+      seasonalityFactor: 1.15,
+      status: 'Approved',
+    };
+
+    setDemandForecasts([newItem, ...demandForecasts]);
+    setShowNewDemandModal(false);
+
+    try {
+      await fetch('/api/ppic/demand-forecasts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDemandData),
+      });
+    } catch (err) {
+      console.error('Failed to post demand forecast:', err);
+    }
+
+    setNewDemandData({
+      productCode: 'FG-NEW-005',
+      productName: '',
+      category: 'Facial Care',
+      salesOrderQty: 10000,
+      forecastQty: 5000,
+      safetyStockTarget: 3000,
+      period: 'Aug 2026',
+    });
+  };
+
+  const handleAddMpsItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const pcs = Number(newMpsData.plannedQtyPcs);
+    const batchKg = Math.round(pcs * 0.0305);
+
+    const newMps: MpsItem = {
+      id: `MPS-${Date.now()}`,
+      mpsCode: `MPS-${newMpsData.productCode || 'COS'}-${Math.floor(Math.random() * 90 + 10)}`,
+      productCode: newMpsData.productCode,
+      productName: newMpsData.productName,
+      formulaCode: `FRM-SKN-2026-${Math.floor(Math.random() * 900 + 100)}`,
+      productionLine: newMpsData.productionLine,
+      plannedQtyPcs: pcs,
+      plannedBatchKg: batchKg,
+      startDate: newMpsData.startDate,
+      endDate: newMpsData.endDate,
+      horizonPeriod: 'Weekly',
+      freezeStatus: 'Open Horizon',
+      approvalStatus: 'Approved',
+      assignedMachine: newMpsData.assignedMachine,
+      priority: newMpsData.priority,
+    };
+
+    setMpsList([newMps, ...mpsList]);
+    setShowNewMpsModal(false);
+
+    try {
+      await fetch('/api/ppic/mps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMpsData),
+      });
+    } catch (err) {
+      console.error('Failed to post MPS item:', err);
+    }
+  };
+
+  const handleToggleMpsFreeze = async (id: string) => {
+    let nextStatus: MpsItem['freezeStatus'] = 'Open Horizon';
+    setMpsList((prev) =>
+      prev.map((m) => {
+        if (m.id === id) {
+          nextStatus = m.freezeStatus === 'Open Horizon' ? 'Slotted' : m.freezeStatus === 'Slotted' ? 'Frozen' : 'Open Horizon';
+          return { ...m, freezeStatus: nextStatus };
+        }
+        return m;
+      })
+    );
+
+    try {
+      await fetch(`/api/ppic/mps/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ freezeStatus: nextStatus }),
+      });
+    } catch (err) {
+      console.error('Failed to update MPS freeze status:', err);
+    }
+  };
+
+  const handleToggleMpsApproval = async (id: string) => {
+    let nextStatus: MpsItem['approvalStatus'] = 'Pending Approval';
+    setMpsList((prev) =>
+      prev.map((m) => {
+        if (m.id === id) {
+          nextStatus = m.approvalStatus === 'Approved' ? 'Pending Approval' : 'Approved';
+          return { ...m, approvalStatus: nextStatus };
+        }
+        return m;
+      })
+    );
+
+    try {
+      await fetch(`/api/ppic/mps/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvalStatus: nextStatus }),
+      });
+    } catch (err) {
+      console.error('Failed to update MPS approval status:', err);
+    }
+  };
+
+  const handleAddScheduleTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const newTask: ProductionScheduleTask = {
+      id: `SCH-${Date.now()}`,
+      moNumber: `MO-202608-${Math.floor(Math.random() * 900 + 100)}`,
+      productName: newScheduleData.productName,
+      batchQtyKg: Number(newScheduleData.batchQtyKg),
+      targetUnits: Number(newScheduleData.targetUnits),
+      machineName: newScheduleData.machineName,
+      scheduledStart: newScheduleData.scheduledStart,
+      scheduledEnd: newScheduleData.scheduledEnd,
+      schedulingMode: 'Finite Capacity (Forward)',
+      materialStatus: '100% Reserved (FEFO Ready)',
+      qcHoldCheck: 'QC Passed',
+      status: 'Scheduled',
+    };
+
+    setScheduleTasks([newTask, ...scheduleTasks]);
+    setShowNewScheduleModal(false);
+
+    try {
+      await fetch('/api/ppic/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productName: newScheduleData.productName,
+          batchQtyKg: newScheduleData.batchQtyKg,
+          targetPcs: newScheduleData.targetUnits,
+          machineVessel: newScheduleData.machineName,
+          scheduledStartTime: newScheduleData.scheduledStart,
+          assignedOperator: newScheduleData.assignedOperator,
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to post schedule task:', err);
+    }
+  };
+
+  const handleAdvanceTaskStatus = (id: string) => {
+    setScheduleTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          const nextStatus =
+            t.status === 'Scheduled'
+              ? ('In Progress' as const)
+              : t.status === 'In Progress'
+              ? ('Completed' as const)
+              : ('Scheduled' as const);
+          return { ...t, status: nextStatus };
+        }
+        return t;
+      })
+    );
+  };
+
+  const handleUpgradeCrpShift = (id: string) => {
+    setCrpCapacities((prev) =>
+      prev.map((c) => {
+        if (c.id === id) {
+          return {
+            ...c,
+            maxCapacityHoursPerWeek: 120,
+            shiftMode: '24h Full Shift (3 Shifts)',
+            utilizationPercentage: Math.round((c.allocatedHours / 120) * 100),
+            bottleneckStatus: c.allocatedHours / 120 > 0.9 ? ('Near Capacity' as const) : ('Optimal' as const),
+          };
+        }
+        return c;
+      })
+    );
+  };
+
+  const handleSendPrToProcurement = () => {
+    setPrSentSuccess(true);
+    setTimeout(() => setPrSentSuccess(false), 4000);
+  };
+
+  const handleSendAiQuery = async (customPrompt?: string) => {
+    const query = customPrompt || aiQuery;
+    if (!query.trim()) return;
+
+    setAiChatHistory((prev) => [...prev, { role: 'user', text: query }]);
+    if (!customPrompt) setAiQuery('');
+    setIsAiLoading(true);
+
+    try {
+      const res = await fetch('/api/ppic/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: query }),
+      });
+      const data = await res.json();
+      if (data.reply) {
+        setAiChatHistory((prev) => [...prev, { role: 'assistant', text: data.reply }]);
+      } else {
+        setAiChatHistory((prev) => [
+          ...prev,
+          { role: 'assistant', text: 'Rekomendasi AI PPIC siap. Niacinamide & Squalane perlu segera di-PR.' },
+        ]);
+      }
+    } catch (err) {
+      setAiChatHistory((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: '🤖 **PPIC AI Assistant Response:**\n- Peringatan Stockout: Active ingredient Squalane 99% impor Jepang perlu PR sebelum tgl 3 Agustus.\n- Line Balancing: Pindahkan batch cream ke Vessel-02 untuk mengurangi beban Vessel-01 (97.5% utilisasi).',
+        },
+      ]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   // Mock Planning Scenarios
   const scenarios: PlanningScenario[] = [
@@ -475,13 +838,24 @@ export const PpicMrpExplorer: React.FC = () => {
     },
   ];
 
-  const handleTriggerMrpExplosion = () => {
+  const handleTriggerMrpExplosion = async () => {
     setIsSimulating(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/ppic/mrp-explosion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setMrpResults(data.data);
+      }
+    } catch (err) {
+      console.error('Error executing MRP explosion:', err);
+    } finally {
       setIsSimulating(false);
       setShowMrpModal(false);
-      alert('✓ Kalkulasi Rekursif MRP Berhasil Selesai! 3 Rekomendasi PR & PO Otomatis Dihasilkan.');
-    }, 1500);
+      alert('✓ Kalkulasi Rekursif MRP Berhasil Selesai! Rekomendasi PR & PO Otomatis Dihasilkan.');
+    }
   };
 
   const criticalShortageCount = mrpResults.filter((m) => m.status === 'Critical Shortage').length;
@@ -604,7 +978,12 @@ export const PpicMrpExplorer: React.FC = () => {
       </div>
 
       {/* Sub-Tabs Navigation */}
-      <div className="border-b border-slate-800 flex items-center space-x-1 overflow-x-auto text-xs font-bold scrollbar-none pb-1">
+      <div
+        onWheel={(e) => {
+          if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY;
+        }}
+        className="border-b border-slate-800 flex items-center space-x-1 overflow-x-auto text-xs font-bold custom-scrollbar scroll-smooth touch-pan-x pb-1"
+      >
         <button
           onClick={() => setActiveSubTab('dashboard')}
           className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl transition-all whitespace-nowrap ${
@@ -923,11 +1302,18 @@ export const PpicMrpExplorer: React.FC = () => {
 
             <div className="flex items-center space-x-2">
               <button
+                onClick={() => setShowNewDemandModal(true)}
+                className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white shadow-lg"
+              >
+                <Plus className="h-4 w-4" />
+                <span>+ Tambah Entry Forecast</span>
+              </button>
+              <button
                 onClick={() => alert('Importing Excel Sales Forecast & Marketing Pipeline...')}
                 className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 hover:bg-slate-800"
               >
                 <Download className="h-3.5 w-3.5" />
-                <span>Import Sales Forecast Excel</span>
+                <span>Import Excel</span>
               </button>
             </div>
           </div>
@@ -943,7 +1329,7 @@ export const PpicMrpExplorer: React.FC = () => {
                     <th className="p-3">Firm Sales Order (Pcs)</th>
                     <th className="p-3">Marketing Forecast (Pcs)</th>
                     <th className="p-3">Indeks Musiman</th>
-                    <th className="p-3">Total Deman Kebutuhan</th>
+                    <th className="p-3">Total Demand Kebutuhan</th>
                     <th className="p-3">Stok Saat Ini</th>
                     <th className="p-3">Target Safety Stock</th>
                     <th className="p-3">Kebutuhan Net Produksi</th>
@@ -1001,7 +1387,7 @@ export const PpicMrpExplorer: React.FC = () => {
             </div>
             <button
               onClick={() => setShowNewMpsModal(true)}
-              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg"
             >
               <Plus className="h-4 w-4" />
               <span>Tambah Entry MPS Baru</span>
@@ -1016,15 +1402,19 @@ export const PpicMrpExplorer: React.FC = () => {
               >
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                   <span className="font-mono text-xs font-bold text-amber-400">{mps.mpsCode}</span>
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                  <button
+                    onClick={() => handleToggleMpsFreeze(mps.id)}
+                    title="Klik untuk ubah status freeze horizon"
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-all hover:scale-105 ${
                       mps.freezeStatus === 'Frozen'
-                        ? 'bg-rose-950 text-rose-300 border border-rose-500/30'
-                        : 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                        ? 'bg-rose-950 text-rose-300 border-rose-500/30'
+                        : mps.freezeStatus === 'Slotted'
+                        ? 'bg-amber-950 text-amber-300 border-amber-500/30'
+                        : 'bg-emerald-950 text-emerald-300 border-emerald-500/30'
                     }`}
                   >
-                    {mps.freezeStatus}
-                  </span>
+                    Status: {mps.freezeStatus} ⚙
+                  </button>
                 </div>
 
                 <div>
@@ -1038,7 +1428,7 @@ export const PpicMrpExplorer: React.FC = () => {
                     <span className="font-bold text-white">{mps.plannedQtyPcs.toLocaleString()} Pcs</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Target Bulk:</span>
+                    <span className="text-slate-400">Target Bulk Bulk:</span>
                     <span className="font-bold text-emerald-300">{mps.plannedBatchKg} Kg</span>
                   </div>
                   <div className="flex justify-between">
@@ -1056,12 +1446,24 @@ export const PpicMrpExplorer: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] text-slate-500">Prioritas: {mps.priority}</span>
                   <button
-                    onClick={() => alert(`Detail MPS Explosion untuk ${mps.mpsCode}`)}
-                    className="text-xs text-indigo-400 font-bold hover:underline"
+                    onClick={() => handleToggleMpsApproval(mps.id)}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                      mps.approvalStatus === 'Approved'
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-500/30'
+                        : 'bg-amber-950 text-amber-300 border-amber-500/30'
+                    }`}
                   >
-                    Explode ke MRP →
+                    {mps.approvalStatus}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveSubTab('mrp_engine');
+                      handleTriggerMrpExplosion();
+                    }}
+                    className="text-xs text-indigo-400 font-bold hover:underline flex items-center space-x-1"
+                  >
+                    <span>Explode ke MRP →</span>
                   </button>
                 </div>
               </div>
@@ -1081,14 +1483,30 @@ export const PpicMrpExplorer: React.FC = () => {
               </p>
             </div>
 
-            <button
-              onClick={() => handleTriggerMrpExplosion()}
-              className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs hover:brightness-110 shadow-lg"
-            >
-              <Zap className="h-4 w-4 text-amber-300" />
-              <span>Hitung Ulang MRP Engine</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleSendPrToProcurement}
+                className="flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Kirim PR Hasil MRP ke Procurement</span>
+              </button>
+              <button
+                onClick={() => handleTriggerMrpExplosion()}
+                className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs hover:brightness-110 shadow-lg"
+              >
+                <Zap className="h-4 w-4 text-amber-300" />
+                <span>Hitung Ulang MRP Engine</span>
+              </button>
+            </div>
           </div>
+
+          {prSentSuccess && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-200 text-xs font-mono font-bold flex items-center space-x-2 animate-bounce">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <span>✓ BERHASIL: Purchase Requisition (PR-2026-08-001 & PR-2026-08-002) telah dikirim ke Modul Purchasing & Procurement!</span>
+            </div>
+          )}
 
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5 space-y-4 shadow-xl">
             <h3 className="text-sm font-bold text-white border-b border-slate-800 pb-2">
@@ -1216,8 +1634,8 @@ export const PpicMrpExplorer: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-slate-800/80">
-                  <div className="flex justify-between text-xs font-mono mb-1">
+                <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                  <div className="flex justify-between text-xs font-mono">
                     <span className="text-slate-400">Persentase Utilisasi</span>
                     <span className="font-black text-amber-300">{c.utilizationPercentage}%</span>
                   </div>
@@ -1227,6 +1645,15 @@ export const PpicMrpExplorer: React.FC = () => {
                       className={`h-full ${c.utilizationPercentage > 95 ? 'bg-rose-500' : 'bg-amber-400'}`}
                     />
                   </div>
+
+                  {c.utilizationPercentage > 90 && (
+                    <button
+                      onClick={() => handleUpgradeCrpShift(c.id)}
+                      className="w-full mt-2 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-[11px] transition-all"
+                    >
+                      ⚡ Tambah Shift 3 (24h) untuk Atasi Bottleneck
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -1244,6 +1671,13 @@ export const PpicMrpExplorer: React.FC = () => {
                 Pengaturan Forward/Backward Scheduling, Alokasi Batching Compounding, Ketersediaan Bahan FEFO, & QC Check Hold.
               </p>
             </div>
+            <button
+              onClick={() => setShowNewScheduleModal(true)}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg"
+            >
+              <Plus className="h-4 w-4" />
+              <span>+ Tambah Work Order / Schedule</span>
+            </button>
           </div>
 
           <div className="space-y-4">
@@ -1263,9 +1697,24 @@ export const PpicMrpExplorer: React.FC = () => {
                     </div>
                   </div>
 
-                  <span className="text-xs font-mono text-emerald-300 bg-emerald-950 px-3 py-1 rounded-full border border-emerald-500/40 font-bold">
-                    {task.status}
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleAdvanceTaskStatus(task.id)}
+                      className="text-xs font-mono text-emerald-300 bg-emerald-950 hover:bg-emerald-900 px-3 py-1 rounded-full border border-emerald-500/40 font-bold transition-all"
+                    >
+                      Status: {task.status} ➔ Advance
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedSlipTask(task);
+                        setShowPrintSlipModal(true);
+                      }}
+                      className="px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-bold flex items-center space-x-1 border border-slate-700"
+                    >
+                      <Printer className="h-3 w-3" />
+                      <span>Cetak Slip</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
@@ -1418,34 +1867,177 @@ export const PpicMrpExplorer: React.FC = () => {
                 <Sparkles className="h-6 w-6" />
               </div>
               <div>
-                <h2 className="text-lg font-black text-white">AI PPIC Intelligence & Production Optimizer</h2>
+                <h2 className="text-lg font-black text-white">AI PPIC Copilot & Interactive Assistant</h2>
                 <p className="text-xs text-slate-300">
-                  Asisten AI Khusus Pabrik Skincare & Kosmetik untuk Prediksi Stockout, Optimasi Lini Compounding, & Auto PO.
+                  Asisten AI Khusus Pabrik Skincare & Kosmetik untuk Prediksi Stockout, Optimasi Line Balancing, & Auto PO.
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                <div className="flex items-center space-x-2 text-amber-300 font-bold text-xs">
-                  <Bot className="h-4 w-4" />
-                  <span>Rekomendasi Pembelian Bahan Baku Otomatis</span>
+            {/* Quick Action Prompt Chips */}
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button
+                onClick={() => handleSendAiQuery('Kalkulasi Defisit Active Ingredient (Niacinamide & Squalane)')}
+                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center space-x-1"
+              >
+                <Zap className="h-3.5 w-3.5" />
+                <span>Kalkulasi Defisit Active Ingredient</span>
+              </button>
+              <button
+                onClick={() => handleSendAiQuery('Rekomendasi Line Balancing Vessel Vacuum Emulsifier')}
+                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 text-xs font-bold flex items-center space-x-1"
+              >
+                <Sliders className="h-3.5 w-3.5" />
+                <span>Line Balancing Vessel</span>
+              </button>
+              <button
+                onClick={() => handleSendAiQuery('Simulasi Skenario Lonjakan Sales Kampanye TikTok (+30%)')}
+                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-purple-500/40 text-purple-300 text-xs font-bold flex items-center space-x-1"
+              >
+                <Bot className="h-3.5 w-3.5" />
+                <span>Simulasi Surge Sales TikTok</span>
+              </button>
+            </div>
+
+            {/* Chat Messages Thread */}
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 max-h-[350px] overflow-y-auto space-y-3 font-mono text-xs">
+              {aiChatHistory.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`p-3.5 rounded-2xl max-w-[85%] whitespace-pre-wrap ${
+                    msg.role === 'user'
+                      ? 'bg-indigo-600 text-white ml-auto text-right font-sans'
+                      : 'bg-slate-900 border border-slate-800 text-slate-200'
+                  }`}
+                >
+                  <div className="text-[10px] text-slate-400 font-bold mb-1">
+                    {msg.role === 'user' ? 'Planner User' : 'Copilot AI PPIC'}
+                  </div>
+                  {msg.text}
                 </div>
-                <p className="text-xs text-slate-300">
-                  Berdasarkan lead time supplier impor Jepang (21 Hari), disarankan segera merilis Purchase Requisition untuk Squalane 99% sebanyak 100Kg sebelum tanggal 3 Agustus untuk mencegah ketiadaan stok pada batch September.
-                </p>
+              ))}
+              {isAiLoading && (
+                <div className="p-3 rounded-2xl bg-slate-900 text-amber-300 font-mono text-xs animate-pulse flex items-center space-x-2">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>AI sedang menganalisis database BOM & Lead Time...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Input Prompt Box */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendAiQuery();
+              }}
+              className="flex items-center space-x-2 pt-1"
+            >
+              <input
+                type="text"
+                value={aiQuery}
+                onChange={(e) => setAiQuery(e.target.value)}
+                placeholder="Tanyakan jadwal, defisit material, atau optimasi shift..."
+                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono"
+              />
+              <button
+                type="submit"
+                disabled={isAiLoading || !aiQuery.trim()}
+                className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg flex items-center space-x-1 disabled:opacity-50"
+              >
+                <span>Kirim</span>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NEW DEMAND FORECAST */}
+      {showNewDemandModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white">Tambah Entry Demand Forecast Baru</h3>
+              <button onClick={() => setShowNewDemandModal(false)} className="text-slate-400 hover:text-white text-xs font-bold">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddDemandForecast} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">Nama Produk Skincare:</label>
+                <input
+                  type="text"
+                  required
+                  value={newDemandData.productName}
+                  onChange={(e) => setNewDemandData({ ...newDemandData, productName: e.target.value })}
+                  placeholder="Contoh: Gentle Cleanser Niacinamide 100ml"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500"
+                />
               </div>
 
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                <div className="flex items-center space-x-2 text-cyan-300 font-bold text-xs">
-                  <Zap className="h-4 w-4" />
-                  <span>Optimasi Penyeimbangan Lini (Line Balancing)</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-400 font-mono mb-1">Kode SKU:</label>
+                  <input
+                    type="text"
+                    value={newDemandData.productCode}
+                    onChange={(e) => setNewDemandData({ ...newDemandData, productCode: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
-                <p className="text-xs text-slate-300">
-                  Vessel Vacuum Emulsifier 1000L mengalami utilisasi 97.5%. AI menyarankan merelokasi batch HydroBarrier Moist Gel ke Vessel-03 (1500L) untuk menghemat 4.5 jam waktu pembersihan (CIP) antar-batch.
-                </p>
+                <div>
+                  <label className="block text-slate-400 font-mono mb-1">Kategori:</label>
+                  <select
+                    value={newDemandData.category}
+                    onChange={(e) => setNewDemandData({ ...newDemandData, category: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option>Facial Care</option>
+                    <option>Moisturizer</option>
+                    <option>Sun Care</option>
+                    <option>Cleanser</option>
+                  </select>
+                </div>
               </div>
-            </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-400 font-mono mb-1">Firm Sales Order (Pcs):</label>
+                  <input
+                    type="number"
+                    value={newDemandData.salesOrderQty}
+                    onChange={(e) => setNewDemandData({ ...newDemandData, salesOrderQty: Number(e.target.value) })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-mono mb-1">Marketing Forecast (Pcs):</label>
+                  <input
+                    type="number"
+                    value={newDemandData.forecastQty}
+                    onChange={(e) => setNewDemandData({ ...newDemandData, forecastQty: Number(e.target.value) })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewDemandModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-xs font-bold text-white hover:bg-indigo-500 shadow-lg"
+                >
+                  Simpan Entry Forecast
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1526,13 +2118,23 @@ export const PpicMrpExplorer: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <form onSubmit={handleAddMpsItem} className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-400 font-mono mb-1">Produk Skincare Target:</label>
-                <select className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500">
-                  <option>FG-SRM-001 - CosmoGlow Intense Brightening Serum 30ml</option>
-                  <option>FG-MOI-002 - HydroBarrier Ceramide Moist Gel Cream 50g</option>
-                  <option>FG-SUN-003 - UV-Shield Invisible Sunscreen SPF 50 50ml</option>
+                <select
+                  value={newMpsData.productName}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    let code = 'FG-SRM-001';
+                    if (name.includes('Ceramide')) code = 'FG-MOI-002';
+                    if (name.includes('Sunscreen')) code = 'FG-SUN-003';
+                    setNewMpsData({ ...newMpsData, productName: name, productCode: code });
+                  }}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="CosmoGlow Intense Brightening Serum 30ml">FG-SRM-001 - CosmoGlow Intense Brightening Serum 30ml</option>
+                  <option value="HydroBarrier Ceramide Moist Gel Cream 50g">FG-MOI-002 - HydroBarrier Ceramide Moist Gel Cream 50g</option>
+                  <option value="UV-Shield Invisible Sunscreen SPF 50 PA++++ 50ml">FG-SUN-003 - UV-Shield Invisible Sunscreen SPF 50 50ml</option>
                 </select>
               </div>
 
@@ -1540,36 +2142,246 @@ export const PpicMrpExplorer: React.FC = () => {
                 <label className="block text-slate-400 font-mono mb-1">Jumlah Target Produksi (Pcs):</label>
                 <input
                   type="number"
-                  defaultValue={10000}
+                  value={newMpsData.plannedQtyPcs}
+                  onChange={(e) => setNewMpsData({ ...newMpsData, plannedQtyPcs: Number(e.target.value) })}
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div>
                 <label className="block text-slate-400 font-mono mb-1">Lini Produksi & Mesin Vessel:</label>
-                <select className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500">
-                  <option>Line A - Vacuum Emulsifier Tank 1000L (Vessel-01)</option>
-                  <option>Line B - High Shear Vacuum Emulsifier 1000L (Vessel-02)</option>
-                  <option>Line C - High Shear Homogenizer 1500L (Vessel-03)</option>
+                <select
+                  value={newMpsData.productionLine}
+                  onChange={(e) => {
+                    const line = e.target.value as any;
+                    let mach = 'Vacuum Emulsifier Tank 1000L (Vessel-01)';
+                    if (line.includes('Line B')) mach = 'High Shear Vacuum Mixer 1000L (Vessel-02)';
+                    if (line.includes('Line C')) mach = 'High Shear Homogenizer 1500L (Vessel-03)';
+                    setNewMpsData({ ...newMpsData, productionLine: line, assignedMachine: mach });
+                  }}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="Line A (Serum & Liquid)">Line A - Vacuum Emulsifier Tank 1000L (Vessel-01)</option>
+                  <option value="Line B (Cream & Emulsion)">Line B - High Shear Vacuum Emulsifier 1000L (Vessel-02)</option>
+                  <option value="Line C (Tube Packaging)">Line C - High Shear Homogenizer 1500L (Vessel-03)</option>
                 </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-400 font-mono mb-1">Mulai:</label>
+                  <input
+                    type="date"
+                    value={newMpsData.startDate}
+                    onChange={(e) => setNewMpsData({ ...newMpsData, startDate: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-mono mb-1">Selesai:</label>
+                  <input
+                    type="date"
+                    value={newMpsData.endDate}
+                    onChange={(e) => setNewMpsData({ ...newMpsData, endDate: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewMpsModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-500 shadow-lg"
+                >
+                  Simpan Entri MPS
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NEW SCHEDULE WORK ORDER */}
+      {showNewScheduleModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white">Buat Work Order / Jadwal Produksi Baru</h3>
+              <button onClick={() => setShowNewScheduleModal(false)} className="text-slate-400 hover:text-white text-xs font-bold">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddScheduleTask} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">Nama Produk:</label>
+                <input
+                  type="text"
+                  required
+                  value={newScheduleData.productName}
+                  onChange={(e) => setNewScheduleData({ ...newScheduleData, productName: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-400 font-mono mb-1">Batch Bulk (Kg):</label>
+                  <input
+                    type="number"
+                    value={newScheduleData.batchQtyKg}
+                    onChange={(e) => setNewScheduleData({ ...newScheduleData, batchQtyKg: Number(e.target.value) })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-mono mb-1">Target Kemasan (Pcs):</label>
+                  <input
+                    type="number"
+                    value={newScheduleData.targetUnits}
+                    onChange={(e) => setNewScheduleData({ ...newScheduleData, targetUnits: Number(e.target.value) })}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-mono mb-1">Mesin Compounding:</label>
+                <input
+                  type="text"
+                  value={newScheduleData.machineName}
+                  onChange={(e) => setNewScheduleData({ ...newScheduleData, machineName: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewScheduleModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-xs font-bold text-white hover:bg-indigo-500 shadow-lg"
+                >
+                  Rilis Work Order
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PRINTABLE WORK ORDER & MATERIAL RESERVATION SLIP */}
+      {showPrintSlipModal && selectedSlipTask && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white text-slate-900 rounded-2xl p-8 max-w-2xl w-full space-y-6 shadow-2xl font-mono">
+            {/* Header Compliance BPOM */}
+            <div className="border-b-2 border-slate-900 pb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-black tracking-tight text-slate-900">PT COSMO MANUFACTURE INDONESIA</h2>
+                <p className="text-xs text-slate-600 font-bold">Lini Produksi Cleanroom Class D - Standar CPKB / BPOM RI</p>
+                <p className="text-[10px] text-slate-500">Kawasan Industri Jababeka Phase III, Cikarang</p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs bg-slate-900 text-white font-bold px-3 py-1 rounded">
+                  WORK ORDER SLIP
+                </span>
+                <p className="text-xs font-bold mt-1 text-slate-800">{selectedSlipTask.moNumber}</p>
               </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-3 pt-3">
+            {/* Task Meta */}
+            <div className="grid grid-cols-2 gap-4 text-xs border-b border-slate-300 pb-4">
+              <div>
+                <span className="text-slate-500 block">Nama Produk Skincare:</span>
+                <span className="font-bold text-slate-900">{selectedSlipTask.productName}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Mesin Vessel Compounding:</span>
+                <span className="font-bold text-slate-900">{selectedSlipTask.machineName}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Volume Batch Bulk / Kemasan:</span>
+                <span className="font-bold text-slate-900">{selectedSlipTask.batchQtyKg} Kg ({selectedSlipTask.targetUnits.toLocaleString()} Pcs)</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Jadwal Rencana:</span>
+                <span className="font-bold text-slate-900">{selectedSlipTask.scheduledStart} s/d {selectedSlipTask.scheduledEnd}</span>
+              </div>
+            </div>
+
+            {/* Material Reservation FEFO Table */}
+            <div>
+              <h4 className="text-xs font-bold mb-2 text-slate-900 border-l-4 border-indigo-600 pl-2">
+                DAFTAR ALOKASI BAHAN BAKU FEFO (GUDANG REAKTOR):
+              </h4>
+              <table className="w-full text-left text-[11px] border border-slate-300">
+                <thead className="bg-slate-100 border-b border-slate-300 text-slate-700">
+                  <tr>
+                    <th className="p-2 border-r border-slate-300">Kode Material</th>
+                    <th className="p-2 border-r border-slate-300">Nama Bahan Baku</th>
+                    <th className="p-2 border-r border-slate-300">Lot/Batch FEFO</th>
+                    <th className="p-2">Dosis Alokasi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  <tr>
+                    <td className="p-2 border-r border-slate-300 font-bold">RM-ACT-001</td>
+                    <td className="p-2 border-r border-slate-300">Niacinamide USP Grade 99.5%</td>
+                    <td className="p-2 border-r border-slate-300 font-bold text-slate-800">LOT-NIA-202506-01</td>
+                    <td className="p-2 font-bold text-indigo-700">10.0 Kg</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 border-r border-slate-300 font-bold">RM-ACT-002</td>
+                    <td className="p-2 border-r border-slate-300">Centella Asiatica Extract Powder</td>
+                    <td className="p-2 border-r border-slate-300 font-bold text-slate-800">LOT-CEN-202509-02</td>
+                    <td className="p-2 font-bold text-indigo-700">5.0 Kg</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Signature Area */}
+            <div className="grid grid-cols-3 gap-4 text-[10px] text-center pt-4 border-t border-slate-300">
+              <div>
+                <p className="text-slate-500 mb-8">Disiapkan Oleh (PPIC):</p>
+                <p className="font-bold border-t border-slate-400 pt-1 text-slate-800">Planner Compounding</p>
+              </div>
+              <div>
+                <p className="text-slate-500 mb-8">Disetujui Oleh (QA/QC):</p>
+                <p className="font-bold border-t border-slate-400 pt-1 text-slate-800">Manager Quality Compliance</p>
+              </div>
+              <div>
+                <p className="text-slate-500 mb-8">Diterima Operator Cleanroom:</p>
+                <p className="font-bold border-t border-slate-400 pt-1 text-slate-800">Lead Operator Vessel</p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end space-x-3 pt-2 font-sans">
               <button
-                onClick={() => setShowNewMpsModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-xs font-bold text-slate-300 hover:bg-slate-800"
+                onClick={() => setShowPrintSlipModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-300"
               >
-                Batal
+                Tutup
               </button>
               <button
-                onClick={() => {
-                  setShowNewMpsModal(false);
-                  alert('✓ Rencana MPS Baru Berhasil Ditambahkan!');
-                }}
-                className="px-5 py-2 rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-500 shadow-lg"
+                onClick={() => window.print()}
+                className="px-5 py-2 rounded-xl bg-indigo-600 text-xs font-bold text-white hover:bg-indigo-500 shadow-lg flex items-center space-x-1.5"
               >
-                Simpan Entri MPS
+                <Printer className="h-4 w-4" />
+                <span>Cetak Lembar Slip MO</span>
               </button>
             </div>
           </div>

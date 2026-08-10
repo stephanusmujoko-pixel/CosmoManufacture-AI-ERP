@@ -224,7 +224,12 @@ export const SaasEngineExplorer: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-800 text-xs font-extrabold overflow-x-auto scrollbar-none">
+      <div
+        onWheel={(e) => {
+          if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY;
+        }}
+        className="flex border-b border-slate-800 text-xs font-extrabold overflow-x-auto custom-scrollbar scroll-smooth touch-pan-x py-1"
+      >
         {[
           { id: 'superadmin', label: '📊 Super Admin SaaS Portal' },
           { id: 'tenantadmin', label: '🏬 Tenant Admin & Quota' },
@@ -1001,8 +1006,14 @@ export const SaasEngineExplorer: React.FC = () => {
                     <span className="font-mono text-slate-400">{a.timestamp}</span>
                     <span className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 font-extrabold uppercase">{a.action}</span>
                   </div>
-                  <p className="text-white font-bold">{a.user} ({a.role})</p>
-                  <p className="text-[11px] text-slate-300">{a.details}</p>
+                  <p className="text-white font-bold">
+                    {a.user || a.userEmail || a.userId || 'User'} ({a.role || 'Member'})
+                  </p>
+                  <p className="text-[11px] text-slate-300 font-mono">
+                    {typeof a.details === 'object' && a.details !== null
+                      ? JSON.stringify(a.details)
+                      : String(a.details ?? '')}
+                  </p>
                 </div>
               ))}
             </div>

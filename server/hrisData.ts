@@ -119,6 +119,50 @@ export interface PerformanceKpi {
   evaluatorName: string;
 }
 
+export interface CleanroomClearance {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  cleanroomGradeAccess: 'Grade A (Sterile Processing)' | 'Grade B (Aseptic Mixing)' | 'Grade C (Secondary Filling)' | 'Grade D (General Cleanroom)';
+  gowningCompetencyScorePct: number;
+  medicalClearanceStatus: 'Cleared (Fit for Cleanroom)' | 'Pending Swab Test' | 'Restricted (Non-Cleanroom Only)';
+  lastSwabTestDate: string;
+  swabTestResult: 'Negative (Pass)' | 'Pending' | 'Action Required';
+  hygieneAuditScorePct: number;
+  airShowerGateAccessGranted: boolean;
+  clearanceExpiryDate: string;
+}
+
+export interface ShiftRoster {
+  id: string;
+  date: string;
+  shiftName: 'Shift 1 (07:00 - 15:00)' | 'Shift 2 (15:00 - 23:00)' | 'Shift 3 (23:00 - 07:00)';
+  lineLocation: string;
+  lineLeader: string;
+  assignedStaffCount: number;
+  cleanroomGrade: string;
+  assignedOperators: Array<{
+    employeeId: string;
+    employeeName: string;
+    position: string;
+    machineQualification: string;
+  }>;
+}
+
+export interface SkillCompetency {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  skills: Array<{
+    machineOrProcess: string;
+    qualificationLevel: 'Certified Master' | 'Qualified Operator' | 'Trainee' | 'Not Qualified';
+    certifiedDate: string;
+    certExpiryDate: string;
+  }>;
+}
+
 export const initialEmployees: Employee[] = [
   {
     id: 'emp-01',
@@ -409,3 +453,141 @@ export const initialPerformanceKpis: PerformanceKpi[] = [
     evaluatorName: 'Quality Director',
   },
 ];
+
+export const initialCleanroomClearances: CleanroomClearance[] = [
+  {
+    id: 'clr-01',
+    employeeId: 'EMP-2026-002',
+    employeeName: 'Rian Hidayat, S.ST.',
+    department: 'Factory Production',
+    cleanroomGradeAccess: 'Grade B (Aseptic Mixing)',
+    gowningCompetencyScorePct: 98,
+    medicalClearanceStatus: 'Cleared (Fit for Cleanroom)',
+    lastSwabTestDate: '2026-08-01',
+    swabTestResult: 'Negative (Pass)',
+    hygieneAuditScorePct: 100,
+    airShowerGateAccessGranted: true,
+    clearanceExpiryDate: '2027-02-01',
+  },
+  {
+    id: 'clr-02',
+    employeeId: 'EMP-2026-003',
+    employeeName: 'Dewi Rahmawati, S.Farm., Apt.',
+    department: 'Quality Control',
+    cleanroomGradeAccess: 'Grade A (Sterile Processing)',
+    gowningCompetencyScorePct: 100,
+    medicalClearanceStatus: 'Cleared (Fit for Cleanroom)',
+    lastSwabTestDate: '2026-07-28',
+    swabTestResult: 'Negative (Pass)',
+    hygieneAuditScorePct: 100,
+    airShowerGateAccessGranted: true,
+    clearanceExpiryDate: '2027-01-28',
+  },
+  {
+    id: 'clr-03',
+    employeeId: 'EMP-2026-004',
+    employeeName: 'Budi Kurniawan, A.Md.T.',
+    department: 'Maintenance',
+    cleanroomGradeAccess: 'Grade C (Secondary Filling)',
+    gowningCompetencyScorePct: 92,
+    medicalClearanceStatus: 'Cleared (Fit for Cleanroom)',
+    lastSwabTestDate: '2026-08-03',
+    swabTestResult: 'Negative (Pass)',
+    hygieneAuditScorePct: 95,
+    airShowerGateAccessGranted: true,
+    clearanceExpiryDate: '2027-02-03',
+  },
+];
+
+export const initialShiftRosters: ShiftRoster[] = [
+  {
+    id: 'rst-01',
+    date: '2026-08-08',
+    shiftName: 'Shift 1 (07:00 - 15:00)',
+    lineLocation: 'Cleanroom Processing Line 1 (Mixing & Filling)',
+    lineLeader: 'Agus Santoso (Prod SPV)',
+    assignedStaffCount: 4,
+    cleanroomGrade: 'Grade B & C',
+    assignedOperators: [
+      {
+        employeeId: 'EMP-2026-002',
+        employeeName: 'Rian Hidayat, S.ST.',
+        position: 'Senior MES Homogenizer Operator',
+        machineQualification: 'MCH-MIX-01 Vacuum Homogenizer 1000L',
+      },
+      {
+        employeeId: 'EMP-2026-004',
+        employeeName: 'Budi Kurniawan, A.Md.T.',
+        position: 'HVAC Cleanroom Tech',
+        machineQualification: 'HVAC-CLEANROOM-01 Class 10k',
+      },
+    ],
+  },
+  {
+    id: 'rst-02',
+    date: '2026-08-08',
+    shiftName: 'Shift 2 (15:00 - 23:00)',
+    lineLocation: 'Cleanroom Packaging Line 2 (Secondary Box & Label)',
+    lineLeader: 'Siti Nurhaliza (Lead Pack)',
+    assignedStaffCount: 6,
+    cleanroomGrade: 'Grade D',
+    assignedOperators: [
+      {
+        employeeId: 'EMP-2026-001',
+        employeeName: 'Dr. Hendra Wijaya',
+        position: 'Formulation Advisor',
+        machineQualification: 'LAB-HPLC-01 Shimadzu',
+      },
+    ],
+  },
+];
+
+export const initialSkillCompetencies: SkillCompetency[] = [
+  {
+    id: 'sk-01',
+    employeeId: 'EMP-2026-002',
+    employeeName: 'Rian Hidayat, S.ST.',
+    department: 'Factory Production',
+    skills: [
+      {
+        machineOrProcess: 'MCH-MIX-01 Vacuum Homogenizer 1000L',
+        qualificationLevel: 'Certified Master',
+        certifiedDate: '2022-07-01',
+        certExpiryDate: '2027-07-01',
+      },
+      {
+        machineOrProcess: 'CPKB Sterilization & Gowning Technique',
+        qualificationLevel: 'Certified Master',
+        certifiedDate: '2023-01-15',
+        certExpiryDate: '2027-01-15',
+      },
+      {
+        machineOrProcess: 'MCH-FILL-02 Automatic Tube Filler',
+        qualificationLevel: 'Qualified Operator',
+        certifiedDate: '2023-05-10',
+        certExpiryDate: '2026-11-10',
+      },
+    ],
+  },
+  {
+    id: 'sk-02',
+    employeeId: 'EMP-2026-003',
+    employeeName: 'Dewi Rahmawati, S.Farm., Apt.',
+    department: 'Quality Control',
+    skills: [
+      {
+        machineOrProcess: 'LIMS Microbiology Challenge Testing',
+        qualificationLevel: 'Certified Master',
+        certifiedDate: '2023-02-01',
+        certExpiryDate: '2028-02-01',
+      },
+      {
+        machineOrProcess: 'CPKB ISO 22716 Auditor',
+        qualificationLevel: 'Certified Master',
+        certifiedDate: '2022-10-10',
+        certExpiryDate: '2027-10-10',
+      },
+    ],
+  },
+];
+

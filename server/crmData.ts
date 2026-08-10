@@ -124,6 +124,91 @@ export interface CustomerActivity {
   outcome: 'Positive' | 'Follow-up Needed' | 'Closing Scheduled' | 'Lost Opportunity';
 }
 
+export interface SampleRequest {
+  id: string;
+  sampleNumber: string;
+  leadId?: string;
+  customerName: string;
+  brandName: string;
+  formulaName: string;
+  labBatchNumber: string;
+  scentNote: string;
+  textureSpec: string;
+  feedbackStatus: 'Pending Review' | 'Revision Requested' | 'Approved for Production' | 'Rejected';
+  revisionNotes?: string;
+  dispatchDate: string;
+  salespersonName: string;
+}
+
+export interface BpomHalalAssistance {
+  id: string;
+  customerName: string;
+  brandName: string;
+  productName: string;
+  targetBpomCategory: string;
+  bpomSubmissionStatus: 'Dokumen Disiapkan' | 'Uji Lab Stabilitas & Mikrobiologi' | 'Drafting e-Registration BPOM' | 'Izin Edar BPOM Terbit (NA)' | 'Sertifikat Halal LPPOM MUI Terbit';
+  naNumber?: string;
+  halalRegNumber?: string;
+  estimatedTargetDate: string;
+}
+
+// Seed Data
+export const dbSampleRequests: SampleRequest[] = [
+  {
+    id: 'samp-001',
+    sampleNumber: 'SAMP/RD/2026/08/001',
+    leadId: 'lead-001',
+    customerName: 'GlowNation Skincare Inc.',
+    brandName: 'GlowNation',
+    formulaName: 'Niacinamide 10% + Ceramide 3x Hydrating Gel Serum',
+    labBatchNumber: 'BATCH-LAB-8819',
+    scentNote: 'Mild Rose Water & Camellia Essence',
+    textureSpec: 'Watery Gel Gelatinous - Fast Absorb',
+    feedbackStatus: 'Approved for Production',
+    revisionNotes: 'Tekstur & aroma sangat disukai tim brand owner.',
+    dispatchDate: '2026-08-04',
+    salespersonName: 'Dimas Anggara',
+  },
+  {
+    id: 'samp-002',
+    sampleNumber: 'SAMP/RD/2026/08/002',
+    leadId: 'lead-002',
+    customerName: 'Klinik Estetika DermaGlow',
+    brandName: 'DermaGlow Pro',
+    formulaName: 'Acne Spot Treatment Gel Salicylic Acid 2% + Cica 5%',
+    labBatchNumber: 'BATCH-LAB-8822',
+    scentNote: 'Unfragranced (Hypoallergenic)',
+    textureSpec: 'Translucent Cooling Gel',
+    feedbackStatus: 'Revision Requested',
+    revisionNotes: 'Tingkatkan sedikit efek cooling & sensasi tidak lengket di kulit sensitif.',
+    dispatchDate: '2026-08-05',
+    salespersonName: 'Siti Nurhaliza',
+  },
+];
+
+export const dbBpomAssistance: BpomHalalAssistance[] = [
+  {
+    id: 'bpom-001',
+    customerName: 'PT Beauty Glow Indonesia',
+    brandName: 'BeautyGlow Cosmetics',
+    productName: 'Luminance Glow Serum 30ml',
+    targetBpomCategory: 'NA - Kosmetik Serum & Essence',
+    bpomSubmissionStatus: 'Izin Edar BPOM Terbit (NA)',
+    naNumber: 'NA18240199882',
+    halalRegNumber: 'ID31210001889920124',
+    estimatedTargetDate: '2026-08-01',
+  },
+  {
+    id: 'bpom-002',
+    customerName: 'GlowNation Skincare Inc.',
+    brandName: 'GlowNation',
+    productName: 'Brightening Niacinamide Gel Cream',
+    targetBpomCategory: 'NA - Kosmetik Pelembab Wajah',
+    bpomSubmissionStatus: 'Uji Lab Stabilitas & Mikrobiologi',
+    estimatedTargetDate: '2026-09-15',
+  },
+];
+
 // Seed Data
 export const dbLeads: Lead[] = [
   {

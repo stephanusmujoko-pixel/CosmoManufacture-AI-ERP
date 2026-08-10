@@ -174,6 +174,51 @@ export interface RdDocument {
   status: 'Active' | 'Under Revision' | 'Archived';
 }
 
+export interface StabilityProtocol {
+  id: string;
+  stabilityCode: string;
+  formulaCode: string;
+  productName: string;
+  testCondition: 'Accelerated (40°C / 75% RH)' | 'Real Time (25°C / 60% RH)' | 'Freeze-Thaw (-10°C to 40°C)' | 'Photostability (UV Chamber)';
+  chamberUnit: string;
+  durationMonths: number;
+  currentInterval: 'Day 0' | 'Month 1' | 'Month 3' | 'Month 6';
+  phDrift: string;
+  viscosityChange: string;
+  organolepticCheck: 'Normal (No Change)' | 'Slight Color Shift' | 'Phase Separation';
+  microbiologyCheck: 'Passed (Zero Growth)' | 'Pending';
+  status: 'Passed & Compliant' | 'Ongoing Testing' | 'Failed (Reformulate)';
+  lastTestedDate: string;
+}
+
+export interface InciSafetyItem {
+  id: string;
+  inciName: string;
+  tradeName: string;
+  casNumber: string;
+  bpomStatus: 'Permitted' | 'Restricted Limit' | 'Prohibited';
+  maxAllowedPercent: number;
+  echaReachStatus: 'Registered' | 'Under Review';
+  halalCertified: boolean;
+  allergenWarning: string;
+  functionCategory: string;
+}
+
+export interface SensoryClinicalPanel {
+  id: string;
+  panelCode: string;
+  formulaCode: string;
+  productName: string;
+  panelSizeCount: number;
+  textureScore: number; // Out of 5
+  absorptionScore: number;
+  nonGreasinessScore: number;
+  fragranceScore: number;
+  overallSatisfactionPercent: number;
+  hriptClinicalResult: 'Passed (Hypoallergenic 0/50 Reaction)' | 'Minor Erythema (1/50)' | 'Testing';
+  dermatologistApproved: boolean;
+}
+
 export interface ProductCostingItem {
   id: string;
   productName: string;
@@ -620,5 +665,138 @@ export const initialProductCostings: ProductCostingItem[] = [
     targetSellingPrice: 149000,
     estimatedMarginPercent: 88.1,
     targetCostMet: true,
+  },
+];
+
+export const initialStabilityProtocols: StabilityProtocol[] = [
+  {
+    id: 'stab-1',
+    stabilityCode: 'STB-2026-001',
+    formulaCode: 'EXP-SUN-V3',
+    productName: 'Sunscreen Mist SPF 50',
+    testCondition: 'Accelerated (40°C / 75% RH)',
+    chamberUnit: 'Chamber Unit B-02',
+    durationMonths: 6,
+    currentInterval: 'Month 3',
+    phDrift: '6.2 -> 6.1 (Minimal Δ0.1)',
+    viscosityChange: '22 cPs (Stable)',
+    organolepticCheck: 'Normal (No Change)',
+    microbiologyCheck: 'Passed (Zero Growth)',
+    status: 'Passed & Compliant',
+    lastTestedDate: '2026-08-01',
+  },
+  {
+    id: 'stab-2',
+    stabilityCode: 'STB-2026-002',
+    formulaCode: 'EXP-SER-V1',
+    productName: 'Biotic Calming Serum',
+    testCondition: 'Real Time (25°C / 60% RH)',
+    chamberUnit: 'Chamber Unit A-01',
+    durationMonths: 12,
+    currentInterval: 'Month 6',
+    phDrift: '5.5 -> 5.5 (Zero Drift)',
+    viscosityChange: '3,200 cPs (Target)',
+    organolepticCheck: 'Normal (No Change)',
+    microbiologyCheck: 'Passed (Zero Growth)',
+    status: 'Passed & Compliant',
+    lastTestedDate: '2026-07-28',
+  },
+  {
+    id: 'stab-3',
+    stabilityCode: 'STB-2026-003',
+    formulaCode: 'EXP-SCL-V2',
+    productName: 'Exfoliating Scalp Tonic',
+    testCondition: 'Freeze-Thaw (-10°C to 40°C)',
+    chamberUnit: 'Chamber Unit C-03',
+    durationMonths: 1,
+    currentInterval: 'Month 1',
+    phDrift: '3.8 -> 3.7',
+    viscosityChange: 'Water-like (10 cPs)',
+    organolepticCheck: 'Normal (No Change)',
+    microbiologyCheck: 'Passed (Zero Growth)',
+    status: 'Ongoing Testing',
+    lastTestedDate: '2026-08-05',
+  },
+];
+
+export const initialInciSafetyItems: InciSafetyItem[] = [
+  {
+    id: 'inci-1',
+    inciName: 'Niacinamide',
+    tradeName: 'Niacinamide PC (Vitamin B3)',
+    casNumber: '98-92-0',
+    bpomStatus: 'Permitted',
+    maxAllowedPercent: 10.0,
+    echaReachStatus: 'Registered',
+    halalCertified: true,
+    allergenWarning: 'None',
+    functionCategory: 'Skin Conditioning / Brightening',
+  },
+  {
+    id: 'inci-2',
+    inciName: 'Salicylic Acid',
+    tradeName: 'BHA Pure Powder',
+    casNumber: '69-72-7',
+    bpomStatus: 'Restricted Limit',
+    maxAllowedPercent: 2.0,
+    echaReachStatus: 'Registered',
+    halalCertified: true,
+    allergenWarning: 'Not for children under 3 years old',
+    functionCategory: 'Exfoliant / Anti-Acne',
+  },
+  {
+    id: 'inci-3',
+    inciName: 'Ethylhexyl Methoxycinnamate (Octinoxate)',
+    tradeName: 'Uvinul MC 80',
+    casNumber: '5466-77-3',
+    bpomStatus: 'Restricted Limit',
+    maxAllowedPercent: 10.0,
+    echaReachStatus: 'Registered',
+    halalCertified: true,
+    allergenWarning: 'UV Filter limit compliance',
+    functionCategory: 'UV Filter (Organic)',
+  },
+  {
+    id: 'inci-4',
+    inciName: 'Phenoxyethanol',
+    tradeName: 'Protectol PE',
+    casNumber: '122-99-6',
+    bpomStatus: 'Restricted Limit',
+    maxAllowedPercent: 1.0,
+    echaReachStatus: 'Registered',
+    halalCertified: true,
+    allergenWarning: 'Max 1.0% in finished cosmetic formulation',
+    functionCategory: 'Preservative',
+  },
+];
+
+export const initialSensoryClinicalPanels: SensoryClinicalPanel[] = [
+  {
+    id: 'sens-1',
+    panelCode: 'PNL-2026-012',
+    formulaCode: 'EXP-SUN-V3',
+    productName: 'Sunscreen Mist SPF 50',
+    panelSizeCount: 30,
+    textureScore: 4.8,
+    absorptionScore: 4.9,
+    nonGreasinessScore: 4.7,
+    fragranceScore: 4.6,
+    overallSatisfactionPercent: 96.5,
+    hriptClinicalResult: 'Passed (Hypoallergenic 0/50 Reaction)',
+    dermatologistApproved: true,
+  },
+  {
+    id: 'sens-2',
+    panelCode: 'PNL-2026-013',
+    formulaCode: 'EXP-SER-V1',
+    productName: 'Biotic Calming Serum',
+    panelSizeCount: 25,
+    textureScore: 4.7,
+    absorptionScore: 4.8,
+    nonGreasinessScore: 4.9,
+    fragranceScore: 4.5,
+    overallSatisfactionPercent: 95.0,
+    hriptClinicalResult: 'Passed (Hypoallergenic 0/50 Reaction)',
+    dermatologistApproved: true,
   },
 ];
